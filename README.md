@@ -1,21 +1,43 @@
 # mpl-nonblock
 
-Small helper utilities to make Matplotlib behave well in interactive IPython workflows:
+`mpl-nonblock` is a small, dependency-light helper library that makes Matplotlib
+behave nicely in interactive IPython workflows.
 
-- reuse figure windows by a stable tag (so window position persists within a session)
-- refresh figures in a nonblocking way (keeps the GUI responsive)
-- best-effort diagnostics when the backend/event loop setup cannot support GUI windows
+It focuses on two practical problems:
 
-This package does not replace Matplotlib; it just codifies the typical recipe
-(`ion` + `show(block=False)` + `pause`) plus a few backend/IPython edge cases.
+- tagged figure windows: re-use the same OS window across repeated runs (stable position)
+- nonblocking refresh: keep the backend event loop responsive without freezing your prompt
+
+It does not replace Matplotlib. It packages the common recipe
+(`ion` + `show(block=False)` + `pause`) plus a few backend/IPython edge cases into a
+reusable, explicit API.
+
+## What You Get
+
+- Reuse windows by tag: `subplots("My Figure", ...)` always targets the same figure
+  (Matplotlib `num=`), so the OS keeps the window where you left it.
+- Nonblocking display: `show(fig, nonblocking=True)` updates the window without
+  blocking your IPython session.
+- Best-effort backend selection: `ensure_backend()` tries to pick a GUI backend
+  early (before `matplotlib.pyplot` import), while honoring an explicit user choice.
+- Diagnostics: `mpl-nonblock-diagnose` prints a small JSON blob that usually makes
+  backend problems obvious.
 
 ## Install
+
+Using `pip`:
 
 ```bash
 pip install mpl-nonblock
 ```
 
-Optional (Linux Qt backend convenience):
+Using `uv`:
+
+```bash
+uv pip install mpl-nonblock
+```
+
+Optional (Linux Qt convenience; installs PySide6):
 
 ```bash
 pip install "mpl-nonblock[qt]"
@@ -23,56 +45,127 @@ pip install "mpl-nonblock[qt]"
 
 ## Quickstart
 
+The key rule: if you want `ensure_backend()` to be able to switch backends,
+call it before importing `matplotlib.pyplot`.
+
 ```python
 from mpl_nonblock import ensure_backend, subplots, show
 
-ensure_backend()  # best-effort; call before importing matplotlib.pyplot elsewhere
+ensure_backend()
 
-fig, ax = subplots("Baseline", clear=True, figsize=(10, 5), constrained_layout=True)
+fig, ax = subplots("Baseline", clear=True, nrows=1, ncols=1, figsize=(10, 5))
 ax.plot([1, 2, 3, 4])
 ax.set_ylabel("some numbers")
+
 show(fig, nonblocking=True)
 ```
 
-In IPython, also set a GUI backend:
+## Recommended IPython Setup
+
+Matplotlib interactivity depends on GUI backends and event loop integration.
+
+In IPython, pick a GUI backend explicitly:
 
 - macOS: `%matplotlib macosx`
 - Linux: `%matplotlib qt` (fallback: `%matplotlib tk`)
 
-Troubleshooting (macOS): if figures do not appear under IPython and you see
-messages about not being able to install the "osx" event loop hook, ensure you
-are not running IPython with `--simple-prompt`:
+Then run scripts normally:
 
-```bash
-ipython --TerminalInteractiveShell.simple_prompt=False
+```python
+%run -i your_script.py
 ```
 
-If you are running headless (no GUI) or using a non-GUI backend (e.g. inline/Agg),
-Matplotlib cannot open native windows. Use `fig.savefig(...)`.
+## API Overview
 
-## Diagnostics
+Import name is `mpl_nonblock`:
 
-```bash
-mpl-nonblock-diagnose
-```
+- `ensure_backend(preferred=None, fallbacks=None, honor_user=True)`
+  - Best-effort backend selection (must run before `matplotlib.pyplot` is imported).
+  - Defaults:
+    - macOS: prefer `macosx` (no auto-switch to Qt)
+    - Linux: prefer `QtAgg`, fallback `TkAgg`
+  - Honors explicit user choice when possible (e.g. `MPLBACKEND`, `%matplotlib ...`).
 
-## Two-window Demo (sin/cos)
+- `subplots(tag, clear=True, nrows=1, ncols=1, **kwargs)`
+  - Creates or reuses a figure by stable `tag`.
+  - This is the core trick for window position stability.
 
-Installed entrypoint:
+- `show(fig, nonblocking=True, raise_window=False, pause=0.001)`
+  - Nonblocking update on GUI backends.
+  - On non-GUI backends (e.g. `Agg`, inline) it does nothing (no warnings).
+  - If a GUI backend is present but nonblocking cannot be used, it falls back to
+    plain `plt.show()` (standard Matplotlib behavior).
+
+- `diagnostics()`
+  - Returns a small dict (backend, interactive detection, headless hints).
+
+## Demos
+
+Two tagged windows (sin/cos):
 
 ```bash
 mpl-nonblock-two-windows
 ```
 
-Or from source:
+From source checkout:
 
 ```bash
 python examples/two_windows.py
 ```
 
-## Notes
+## Tests
 
-- Window position persistence is a property of reusing the same native window
-  (Matplotlib figure `num=`); it persists within a single Python process/kernel.
-- If you are headless (no GUI) or using a non-GUI backend, figures cannot be shown.
-  Use `fig.savefig(...)`.
+Unit tests are headless-safe and do not open GUI windows.
+They force the `Agg` backend so they can run in CI.
+
+Run tests:
+
+```bash
+python -m pytest
+```
+
+If you are using `uv`:
+
+```bash
+uv pip install -e ".[test]"
+python -m pytest
+```
+
+## Troubleshooting
+
+### "Nothing shows" in IPython
+
+1) Verify you are using a GUI backend:
+   - `%matplotlib macosx` (macOS)
+   - `%matplotlib qt` / `%matplotlib tk` (Linux)
+
+2) macOS + IPython: avoid `--simple-prompt`.
+If you see messages about not being able to install the "osx" event loop hook,
+start IPython with:
+
+```bash
+ipython --TerminalInteractiveShell.simple_prompt=False
+```
+
+3) If you are headless (no GUI): there is no window to show.
+Use `fig.savefig(...)`.
+
+### Diagnose
+
+```bash
+mpl-nonblock-diagnose
+```
+
+This prints a JSON blob (backend, interpreter, DISPLAY/WAYLAND hints).
+
+## Design Notes / Limitations
+
+- Window position persistence comes from reusing the same native window
+  (Matplotlib figure `num=`). This persists within a single Python process/kernel.
+- This library does not attempt to persist window geometry across separate processes.
+- Backend switching is only possible before importing `matplotlib.pyplot`.
+- On non-GUI backends (inline/Agg), `show()` cannot open windows.
+
+## License
+
+MIT. See `LICENSE`.
