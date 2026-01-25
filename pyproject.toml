@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mpl-nonblock"
-version = "0.1.0"
+version = "1.0.0"
 description = "Nonblocking Matplotlib helpers for interactive IPython workflows"
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [{ name = "Andrea Alberti" }]
 dependencies = [
   "matplotlib>=3.5",
