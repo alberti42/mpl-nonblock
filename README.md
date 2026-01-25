@@ -43,6 +43,8 @@ Optional (Linux Qt convenience; installs PySide6):
 pip install "mpl-nonblock[qt]"
 ```
 
+This installs the optional Qt dependency (`PySide6`).
+
 ## Quickstart
 
 The key rule: if you want `ensure_backend()` to be able to switch backends,
@@ -118,9 +120,21 @@ python examples/two_windows.py
 Unit tests are headless-safe and do not open GUI windows.
 They force the `Agg` backend so they can run in CI.
 
-Run tests:
+Install test dependencies, then run pytest.
+
+From a source checkout:
 
 ```bash
+python -m pip install -e ".[test]"
+python -m pytest
+```
+
+The `[test]` extra installs test-only dependencies (currently `pytest`).
+
+If you installed from PyPI and want to run tests locally:
+
+```bash
+python -m pip install "mpl-nonblock[test]"
 python -m pytest
 ```
 
