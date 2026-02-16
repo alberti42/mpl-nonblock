@@ -16,11 +16,8 @@ reusable, explicit API.
 
 ## What You Get
 
-- Reuse windows by tag: `subplots("My Figure", ...)` always targets the same figure
-   (Matplotlib `num=`), so the OS keeps the window where you left it.
-- Matplotlib-compat tip: prefer `num=` in shared code. This package also accepts
-  `tag=` as an alias for `num=`, but `tag=` is not a Matplotlib keyword, so code that
-  uses it will not run unchanged if you later remove `mpl-nonblock`.
+ - Stable window reuse (Matplotlib-native): use `plt.subplots(num=..., clear=...)` to
+   keep reusing the same OS window (stable position) across runs in the same process.
 - Drop-in `plt.show()` replacement: `show()` defaults to nonblocking behavior
   (`block=False`) so your prompt stays responsive.
 - Explicit nonblocking refresh primitive: `refresh(fig)` is the "movie frame" helper
@@ -67,11 +64,13 @@ call it before importing `matplotlib.pyplot`.
 [TODO] Fix the example; we need to create two figures; it makes it clearer how the nonblock behavior works.
 
 ```python
-from mpl_nonblock import ensure_backend, subplots, show
+from mpl_nonblock import ensure_backend, show
 
 ensure_backend()
 
-fig, ax = subplots(num="Baseline", clear=True, nrows=1, ncols=1, figsize=(10, 5))
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots(num="Baseline", clear=True, figsize=(10, 5))
 ax.plot([1, 2, 3, 4])
 ax.set_ylabel("some numbers")
 
@@ -103,11 +102,6 @@ Import name is `mpl_nonblock`:
     - macOS: prefer `macosx` (no auto-switch to Qt)
     - Linux: prefer `QtAgg`, fallback `TkAgg`
   - Honors explicit user choice when possible (e.g. `MPLBACKEND`, `%matplotlib ...`).
-
-- `subplots(*args, num=None, tag=None, clear=True, **kwargs)`
-  - Drop-in wrapper around `matplotlib.pyplot.subplots()`.
-  - Use `num=` (Matplotlib-compatible) or `tag=` (alias) to reuse the same window.
-  - For backward compatibility: `subplots("My Figure", ...)` is treated as `num="My Figure"`.
 
 - `show(*, block=False, pause=0.001)`
   - Drop-in replacement for `matplotlib.pyplot.show()`.

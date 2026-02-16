@@ -63,47 +63,20 @@ def _plot_step(ax: Any, *, step: int) -> None:
     ax.set_title(f"visual_subplots_test step={step}")
 
 
-def _mk_fig_ax(*, variant: str, call: str, num: str | None, clear: bool):
-    if variant == "plt.subplots":
-        import matplotlib.pyplot as plt
+def _mk_fig_ax(*, call: str, num: str | None, clear: bool):
+    import matplotlib.pyplot as plt
 
-        if call == "tag_kw":
-            raise SystemExit("plt.subplots has no tag=; use --call num_kw")
+    if call == "pos":
+        if num is None:
+            return plt.subplots(1, 1, figsize=(7.0, 4.0))
+        return plt.subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
 
-        if call == "pos":
-            if num is None:
-                return plt.subplots(1, 1, figsize=(7.0, 4.0))
-            return plt.subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
+    if call == "num_kw":
+        if num is None:
+            return plt.subplots(1, 1, figsize=(7.0, 4.0))
+        return plt.subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
 
-        if call == "num_kw":
-            if num is None:
-                return plt.subplots(1, 1, figsize=(7.0, 4.0))
-            return plt.subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
-
-        raise SystemExit(f"unknown --call: {call!r}")
-
-    if variant == "mpl_nonblock.subplots":
-        from mpl_nonblock import subplots
-
-        if call == "pos":
-            if num is None:
-                return subplots(1, 1, figsize=(7.0, 4.0))
-            # Matplotlib-compatible: figure identity is a keyword (`num=`), not positional.
-            return subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
-
-        if call == "num_kw":
-            if num is None:
-                return subplots(1, 1, figsize=(7.0, 4.0))
-            return subplots(1, 1, num=num, clear=clear, figsize=(7.0, 4.0))
-
-        if call == "tag_kw":
-            if num is None:
-                return subplots(1, 1, figsize=(7.0, 4.0))
-            return subplots(1, 1, tag=num, clear=clear, figsize=(7.0, 4.0))
-
-        raise SystemExit(f"unknown --call: {call!r}")
-
-    raise SystemExit(f"unknown variant: {variant!r}")
+    raise SystemExit(f"unknown --call: {call!r}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -111,19 +84,10 @@ def main(argv: list[str] | None = None) -> int:
         description="Manual, visual tests for subplots() compatibility and figure reuse"
     )
     p.add_argument(
-        "--variant",
-        default="plt.subplots",
-        choices=(
-            "plt.subplots",
-            "mpl_nonblock.subplots",
-        ),
-        help="Which subplots implementation to call",
-    )
-    p.add_argument(
         "--call",
         default="pos",
-        choices=("pos", "num_kw", "tag_kw"),
-        help="How to pass the figure identity (positional tag, num=, or tag=)",
+        choices=("pos", "num_kw"),
+        help="How to pass the figure identity (positional vs num=)",
     )
     p.add_argument(
         "--num",
@@ -148,12 +112,11 @@ def main(argv: list[str] | None = None) -> int:
     import matplotlib
 
     print(f"backend: {matplotlib.get_backend()}")
-    print(f"variant: {args.variant}")
     print(f"call: {args.call}")
     print(f"num/tag: {num!r}")
     print(f"clear: {clear}")
 
-    fig, ax = _mk_fig_ax(variant=args.variant, call=args.call, num=num, clear=clear)
+    fig, ax = _mk_fig_ax(call=args.call, num=num, clear=clear)
     _plot_step(ax, step=1)
 
     try:
@@ -173,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     # Step 2: call subplots again, expecting reuse if num/tag is set.
-    fig2, ax2 = _mk_fig_ax(variant=args.variant, call=args.call, num=num, clear=clear)
+    fig2, ax2 = _mk_fig_ax(call=args.call, num=num, clear=clear)
     _plot_step(ax2, step=2)
 
     try:

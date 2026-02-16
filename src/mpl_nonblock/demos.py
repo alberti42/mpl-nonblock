@@ -4,7 +4,7 @@ import math
 from datetime import datetime
 from typing import Any
 
-from .core import ensure_backend, is_interactive, refresh, subplots
+from .core import ensure_backend, is_interactive, refresh
 
 
 def two_windows_main() -> None:
@@ -17,6 +17,8 @@ def two_windows_main() -> None:
 
     # Best-effort backend selection (must happen before pyplot import).
     ensure_backend()
+
+    import matplotlib.pyplot as plt
 
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -36,11 +38,11 @@ def two_windows_main() -> None:
             f"Expected a single Matplotlib Axes for {name}, got {type(ax)!r}"
         )
 
-    fig1, ax1 = subplots(
+    fig1, ax1 = plt.subplots(
+        1,
+        1,
         num="sin(2pi x)",
         clear=True,
-        nrows=1,
-        ncols=1,
         figsize=(8, 4),
         constrained_layout=True,
     )
@@ -49,11 +51,11 @@ def two_windows_main() -> None:
     ax1.set_title(f"sin(2pi x)  [{stamp}]")
     ax1.grid(True, alpha=0.3)
 
-    fig2, ax2 = subplots(
+    fig2, ax2 = plt.subplots(
+        1,
+        1,
         num="cos(2pi x)",
         clear=True,
-        nrows=1,
-        ncols=1,
         figsize=(8, 4),
         constrained_layout=True,
     )
@@ -66,7 +68,5 @@ def two_windows_main() -> None:
         refresh(fig1)
         refresh(fig2)
         return
-
-    import matplotlib.pyplot as plt
 
     plt.show()

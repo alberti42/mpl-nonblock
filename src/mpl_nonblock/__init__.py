@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from importlib.metadata import PackageNotFoundError, version
 
-from .core import diagnostics, ensure_backend, is_interactive, refresh, show, subplots
+from .core import diagnostics, ensure_backend, is_interactive, refresh, show
 
 try:
     __version__ = version("mpl-nonblock")
@@ -16,5 +16,4 @@ __all__ = [
     "is_interactive",
     "refresh",
     "show",
-    "subplots",
 ]

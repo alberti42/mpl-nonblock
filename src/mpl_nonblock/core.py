@@ -16,7 +16,6 @@ __all__ = [
     "is_interactive",
     "refresh",
     "show",
-    "subplots",
 ]
 
 
@@ -223,31 +222,6 @@ def ensure_backend(
         tried=tuple(tried),
         reason="could not switch backend; using existing",
     )
-
-
-def subplots(
-    *args: Any,
-    tag: str | None = None,
-    num: Any | None = None,
-    clear: bool = True,
-    **kwargs: Any,
-):
-    """Drop-in replacement for `matplotlib.pyplot.subplots()` with stable window reuse.
-
-    You can specify the figure identity via `num=` (Matplotlib-compatible) or via
-    `tag=` (alias).
-    """
-
-    import matplotlib.pyplot as plt
-
-    if tag is not None:
-        if num is not None and num != tag:
-            raise TypeError("subplots() got both tag and num with different values")
-        num = tag
-
-    if num is None:
-        return plt.subplots(*args, clear=clear, **kwargs)
-    return plt.subplots(*args, num=num, clear=clear, **kwargs)
 
 
 @dataclass(frozen=True)
