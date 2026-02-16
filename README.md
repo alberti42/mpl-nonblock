@@ -11,17 +11,21 @@ It focuses on two practical problems:
 - nonblocking refresh: keep the backend event loop responsive without freezing your prompt
 
 It does not replace Matplotlib. It packages the common recipe
-(`ion` + `show(block=False)` + `pause`) plus a few backend/IPython edge cases into a
+(`pause`-driven event loop pumping) plus a few backend/IPython edge cases into a
 reusable, explicit API.
 
 ## What You Get
 
 - Reuse windows by tag: `subplots("My Figure", ...)` always targets the same figure
-  (Matplotlib `num=`), so the OS keeps the window where you left it.
-- Nonblocking display: `show(fig, nonblocking=True)` updates the window without
-  blocking your IPython session.
+   (Matplotlib `num=`), so the OS keeps the window where you left it.
+- Drop-in `plt.show()` replacement: `show()` defaults to nonblocking behavior
+  (`block=False`) so your prompt stays responsive.
+- Explicit nonblocking refresh primitive: `refresh(fig)` is the "movie frame" helper
+  (update artists, then call `refresh(fig)` to process GUI events).
 - Best-effort backend selection: `ensure_backend()` tries to pick a GUI backend
   early (before `matplotlib.pyplot` import), while honoring an explicit user choice.
+- Best-effort window raising (optional): `refresh(fig, raise_window=True)` attempts
+  to bring the figure window to the front on supported backends.
 - Diagnostics: `mpl-nonblock-diagnose` prints a small JSON blob that usually makes
   backend problems obvious.
 
@@ -64,11 +68,11 @@ from mpl_nonblock import ensure_backend, subplots, show
 
 ensure_backend()
 
-fig, ax = subplots("Baseline", clear=True, nrows=1, ncols=1, figsize=(10, 5))
+fig, ax = subplots(num="Baseline", clear=True, nrows=1, ncols=1, figsize=(10, 5))
 ax.plot([1, 2, 3, 4])
 ax.set_ylabel("some numbers")
 
-show(fig, nonblocking=True)
+show()  # nonblocking by default
 ```
 
 ## Recommended IPython Setup
@@ -97,15 +101,19 @@ Import name is `mpl_nonblock`:
     - Linux: prefer `QtAgg`, fallback `TkAgg`
   - Honors explicit user choice when possible (e.g. `MPLBACKEND`, `%matplotlib ...`).
 
-- `subplots(tag, clear=True, nrows=1, ncols=1, **kwargs)`
-  - Creates or reuses a figure by stable `tag`.
-  - This is the core trick for window position stability.
+- `subplots(*args, num=None, tag=None, clear=True, **kwargs)`
+  - Drop-in wrapper around `matplotlib.pyplot.subplots()`.
+  - Use `num=` (Matplotlib-compatible) or `tag=` (alias) to reuse the same window.
+  - For backward compatibility: `subplots("My Figure", ...)` is treated as `num="My Figure"`.
 
-- `show(fig, nonblocking=True, raise_window=False, pause=0.001)`
-  - Nonblocking update on GUI backends.
+- `show(*, block=False, pause=0.001)`
+  - Drop-in replacement for `matplotlib.pyplot.show()`.
+  - Defaults to `block=False` (nonblocking) and uses `pause` to keep the GUI responsive.
   - On non-GUI backends (e.g. `Agg`, inline) it does nothing (no warnings).
-  - If a GUI backend is present but nonblocking cannot be used, it falls back to
-    plain `plt.show()` (standard Matplotlib behavior).
+
+- `refresh(fig, *, pause=0.001, raise_window=False)`
+  - Nonblocking refresh of a specific figure (useful for animations / repeated updates).
+  - If `raise_window=True`, it attempts to raise/focus the window (best-effort).
 
 - `is_interactive()`
   - Returns `True` when running inside IPython/Jupyter or a REPL-ish session
@@ -192,6 +200,8 @@ This prints a JSON blob (backend, interpreter, DISPLAY/WAYLAND hints).
 - This library does not attempt to persist window geometry across separate processes.
 - Backend switching is only possible before importing `matplotlib.pyplot`.
 - On non-GUI backends (inline/Agg), `show()` cannot open windows.
+- Window raising/focus is backend-dependent. Matplotlib does not expose a single
+  portable "raise this figure" API, so `raise_window` may be a no-op on some setups.
 
 ## License
 
