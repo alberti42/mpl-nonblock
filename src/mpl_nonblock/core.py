@@ -7,89 +7,15 @@ from pathlib import Path
 from typing import Any
 
 from ._helpers import _WARNED_ONCE, _in_ipython, is_interactive, _warn_once
+from .backends import _backend_str, _is_gui_backend
 
 __all__ = [
     "ShowStatus",
     "diagnostics",
     "is_interactive",
-    "recommended_backend",
     "refresh",
     "show",
 ]
-
-
-def _backend_str() -> str:
-    """Return the current Matplotlib backend string (best-effort)."""
-
-    import matplotlib
-
-    try:
-        return str(matplotlib.get_backend())
-    except Exception as e:
-        _warn_once(
-            "backend_str",
-            "mpl_nonblock: matplotlib.get_backend() failed; treating backend as unknown",
-            e,
-        )
-        return "unknown"
-
-
-def _is_gui_backend(backend: str) -> bool:
-    """Return True if the backend name looks like a GUI backend.
-
-    Used to decide whether showing/refreshing can open a native window.
-    """
-
-    b = backend.lower().strip()
-    # Note: QtAgg/TkAgg contain "agg" but are GUI backends.
-    non_gui = {
-        "agg",
-        "module://matplotlib_inline.backend_inline",
-        "inline",
-        "nbagg",
-        "webagg",
-        "pdf",
-        "ps",
-        "svg",
-        "cairo",
-        "template",
-    }
-    if b in non_gui:
-        return False
-    if "matplotlib_inline" in b:
-        return False
-    if "backend_inline" in b:
-        return False
-    if b == "macosx":
-        return True
-    if b.endswith("agg"):
-        # Likely GUI (qtagg, tkagg, gtk3agg, wxagg...).
-        return True
-    # Unknown backend string: be conservative.
-    return False
-
-
-def recommended_backend(
-    *,
-    macos: str = "macosx",
-    linux: str = "TkAgg",
-    windows: str = "TkAgg",
-    other: str = "TkAgg",
-) -> str:
-    """Return a backend name recommendation for the current platform.
-
-    This does not call `matplotlib.use()`. It only returns a string so users can
-    make backend selection explicit and non-magical.
-    """
-
-    plat = sys.platform
-    if plat == "darwin":
-        return macos
-    if plat.startswith("linux"):
-        return linux
-    if plat.startswith("win"):
-        return windows
-    return other
 
 
 @dataclass(frozen=True)

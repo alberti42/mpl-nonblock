@@ -9,7 +9,8 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "mpl-nonblock requires matplotlib. Install it first (e.g. `pip install matplotlib`)."
     ) from e
 
-from .core import diagnostics, is_interactive, recommended_backend, refresh, show
+from .backends import recommended_backend
+from .core import diagnostics, is_interactive, refresh, show
 
 try:
     __version__ = version("mpl-nonblock")
