@@ -284,3 +284,16 @@ def test_show_no_args_nonblocking_uses_pause(monkeypatch: Any) -> None:
     assert st.nonblocking_used is True
     assert st.reason == "nonblocking show"
     assert called == [0.001]
+
+
+def test_show_rejects_positional_fig_argument() -> None:
+    _force_agg_backend()
+
+    from mpl_nonblock import core
+
+    try:
+        core.show(object())  # type: ignore[call-arg]
+    except TypeError:
+        pass
+    else:
+        raise AssertionError("expected TypeError")

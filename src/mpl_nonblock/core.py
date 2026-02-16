@@ -98,20 +98,17 @@ def refresh(
     )
 
 
-def show(*args: Any, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
+def show(*, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
     """Drop-in replacement for `matplotlib.pyplot.show()`.
 
     Defaults to nonblocking behavior (`block=False`) by using `plt.pause(pause)`.
-    For compatibility with early versions of this package, `show(fig)` calls
-    `refresh(fig)`.
+
+    Note: we intentionally do not call `plt.show(block=False)` here. In practice it
+    is not needed for nonblocking refresh, and repeatedly calling `show()` can
+    cause focus-stealing behavior on some backends.
     """
 
     import matplotlib.pyplot as plt
-
-    if len(args) == 1:
-        return refresh(args[0], pause=pause)
-    if len(args) != 0:
-        raise TypeError("show() takes at most 1 positional argument")
 
     backend = _backend_str()
     gui = _is_gui_backend(backend)
