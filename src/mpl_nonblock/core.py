@@ -21,10 +21,17 @@ __all__ = [
 
 
 def _pyplot_imported() -> bool:
+    """Return True if `matplotlib.pyplot` is already imported.
+
+    Backend switching must happen before importing pyplot.
+    """
+
     return "matplotlib.pyplot" in sys.modules
 
 
 def _backend_str() -> str:
+    """Return the current Matplotlib backend string (best-effort)."""
+
     try:
         import matplotlib
 
@@ -41,6 +48,11 @@ def _backend_str() -> str:
 
 
 def _is_gui_backend(backend: str) -> bool:
+    """Return True if the backend name looks like a GUI backend.
+
+    Used to decide whether showing/refreshing can open a native window.
+    """
+
     b = backend.lower().strip()
     # Note: QtAgg/TkAgg contain "agg" but are GUI backends.
     non_gui = {
@@ -72,6 +84,11 @@ def _is_gui_backend(backend: str) -> bool:
 
 @dataclass(frozen=True)
 class BackendStatus:
+    """Return value for `ensure_backend()`.
+
+    This is a small, stable summary of what backend is active and whether we switched.
+    """
+
     backend: str
     selected: bool
     can_switch: bool
@@ -146,6 +163,8 @@ def ensure_backend(
         )
 
     def _try_set(name: str) -> bool:
+        """Try to activate a backend name; return True on success."""
+
         tried.append(name)
         want = name.lower()
 
@@ -238,6 +257,11 @@ def subplots(
 
 @dataclass(frozen=True)
 class ShowStatus:
+    """Return value for `show()` / `refresh()`.
+
+    Captures what backend we were on and whether we actually used a nonblocking path.
+    """
+
     backend: str
     nonblocking_requested: bool
     nonblocking_used: bool
@@ -252,7 +276,9 @@ def refresh(
 ) -> ShowStatus:
     """Nonblocking refresh of a specific figure.
 
-    This is the "movie frame" primitive: update artists, then call `refresh(fig)`.
+    This is the "movie frame" primitive: update artists, then call `refresh(fig)`
+    to pump the GUI event loop (via `plt.pause`). Optionally, try to raise/focus the
+    window via backend-specific hooks.
     """
 
     import matplotlib.pyplot as plt
@@ -300,9 +326,9 @@ def refresh(
 def show(*args: Any, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
     """Drop-in replacement for `matplotlib.pyplot.show()`.
 
-    Defaults to nonblocking behavior (block=False).
-
-    Compatibility: `show(fig)` behaves like `refresh(fig)`.
+    Defaults to nonblocking behavior (`block=False`) by using `plt.pause(pause)`.
+    For compatibility with early versions of this package, `show(fig)` calls
+    `refresh(fig)`.
     """
 
     import matplotlib.pyplot as plt
@@ -357,7 +383,10 @@ def show(*args: Any, block: bool | None = False, pause: float = 0.001) -> ShowSt
 
 
 def diagnostics() -> dict[str, Any]:
-    """Return a small diagnostics dictionary for troubleshooting."""
+    """Return a small diagnostics dictionary for troubleshooting.
+
+    Intended for CLI reporting (`mpl-nonblock-diagnose`) and bug reports.
+    """
 
     out: dict[str, Any] = {}
     out["sys.executable"] = sys.executable

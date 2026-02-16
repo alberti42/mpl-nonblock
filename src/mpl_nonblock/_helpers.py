@@ -19,7 +19,12 @@ _IN_IPYTHON: bool | None = None
 
 
 def _warn_once(key: str, message: str, exc: BaseException | None = None) -> None:
-    """Emit a warning at most once per process for `key`."""
+    """Warn once per process for a given key.
+
+    This library does a lot of best-effort backend/IPython integration where failures
+    should not crash an interactive session. This helper keeps the signal (a warning)
+    without spamming loops.
+    """
 
     if key in _WARNED_ONCE:
         return
@@ -30,7 +35,11 @@ def _warn_once(key: str, message: str, exc: BaseException | None = None) -> None
 
 
 def _in_ipython() -> bool:
-    """Return True when running under IPython."""
+    """Return True when running under IPython.
+
+    IPython sets the magic name `__IPYTHON__`. We use it to gate IPython-only
+    integrations (e.g. `%matplotlib ...`) without importing IPython eagerly.
+    """
 
     global _IN_IPYTHON
     if _IN_IPYTHON is not None:
@@ -44,7 +53,10 @@ def _in_ipython() -> bool:
 
 
 def is_interactive() -> bool:
-    """Return True in IPython/Jupyter or REPL-ish sessions."""
+    """Return True in IPython/Jupyter or REPL-ish sessions.
+
+    This is used to decide whether to apply nonblocking display defaults.
+    """
 
     if _in_ipython():
         return True

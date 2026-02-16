@@ -26,6 +26,8 @@ def two_windows_main() -> None:
     y_cos = [math.cos(2.0 * math.pi * xi) for xi in x]
 
     def _require_axes(ax: Any, *, name: str) -> Any:
+        """Validate the demo got a single Axes, not an array."""
+
         # In this demo we expect a single Axes (nrows=ncols=1). Fail fast if the
         # Matplotlib return shape changes.
         if hasattr(ax, "plot") and hasattr(ax, "set_title"):

@@ -8,7 +8,11 @@ __all__ = [
 
 
 def raise_figure(fig: Any) -> None:
-    """Best-effort: raise the figure window (backend-dependent)."""
+    """Best-effort: raise/focus a Matplotlib figure window.
+
+    Matplotlib does not expose a single portable "raise this window" API, so we
+    poke backend-specific manager/window objects when available.
+    """
 
     try:
         import matplotlib
@@ -29,6 +33,8 @@ def raise_figure(fig: Any) -> None:
 
 
 def _raise_macosx(fig: Any) -> None:
+    """macOSX backend: call the manager's private `_raise()` if present."""
+
     try:
         mgr = fig.canvas.manager  # type: ignore[attr-defined]
         raise_fn = getattr(mgr, "_raise", None)
@@ -39,6 +45,8 @@ def _raise_macosx(fig: Any) -> None:
 
 
 def _raise_qt(fig: Any) -> None:
+    """Qt backends: call `show()`, `raise_()`, and `activateWindow()` if present."""
+
     try:
         mgr = fig.canvas.manager  # type: ignore[attr-defined]
         win = getattr(mgr, "window", None)
@@ -59,6 +67,8 @@ def _raise_qt(fig: Any) -> None:
 
 
 def _raise_tk(fig: Any) -> None:
+    """Tk backend: call `lift()`/`focus_force()` on the Tk window if present."""
+
     try:
         mgr = fig.canvas.manager  # type: ignore[attr-defined]
         win = getattr(mgr, "window", None)
