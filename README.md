@@ -102,9 +102,15 @@ def main() -> None:
         refresh(fig1)
         refresh(fig2)
 
+        # A short pause if you need to reduce the
+        # the number of frames per second
         time.sleep(0.02)
 
-    # If you run this as a script (not from IPython), keep windows open.
+    # If you run this from a non-interactive Python
+    # (i.e., not from IPython or any other interactive
+    # Python sessions), keep windows open at the end
+    # bt preventing exiting the code too immediately
+    # after the last frame of the movie.
     if not is_interactive():
         show(block=True)
 
