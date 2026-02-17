@@ -37,30 +37,42 @@ def _is_gui_backend(backend: str) -> bool:
     """
 
     b = backend.lower().strip()
-    # Note: QtAgg/TkAgg contain "agg" but are GUI backends.
-    non_gui = {
+
+    # Distinction:
+    # - Matplotlib docs group backends into "interactive" and "non-interactive".
+    # - This helper answers a different question: "will this open a native OS window?"
+    #   Notebook/browser backends are interactive, but they are not native windows.
+    #
+    # Reference:
+    # https://matplotlib.org/stable/users/explain/figure/backends.html
+
+    non_gui_exact = {
+        # Non-interactive backends (docs):
         "agg",
-        "module://matplotlib_inline.backend_inline",
-        "inline",
-        "nbagg",
-        "webagg",
+        "cairo",
         "pdf",
+        "pgf",
         "ps",
         "svg",
-        "cairo",
         "template",
+        # Notebook/browser backends (interactive, but not native windows):
+        "inline",
+        "module://matplotlib_inline.backend_inline",
+        "nbagg",
+        "notebook",
+        "webagg",
     }
-    if b in non_gui:
+    if b in non_gui_exact:
         return False
-    if "matplotlib_inline" in b:
+    if "matplotlib_inline" in b or "backend_inline" in b:
         return False
-    if "backend_inline" in b:
-        return False
+
+    # Known native-window backends.
     if b == "macosx":
         return True
-    if b.endswith("agg"):
-        # Likely GUI (qtagg, tkagg, gtk3agg, wxagg...).
+    if b.startswith(("qt", "tk", "gtk3", "gtk4", "wx")):
         return True
+
     # Unknown backend string: be conservative.
     return False
 
