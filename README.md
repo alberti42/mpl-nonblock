@@ -131,7 +131,13 @@ def main() -> None:
     # after the last frame of the movie.
     if not is_interactive():
         # Terminal-run fallback: keep windows open after the script ends.
-        # (This keeps the GUI responsive while waiting for Enter.)
+        # Minimal (may not work on every backend):
+        #
+        #   import sys
+        #   if sys.stdin.isatty():
+        #       input("Press Enter to exit...")
+        #
+        # Robust: keep the GUI responsive while waiting.
         from mpl_nonblock import hold_windows
 
         hold_windows(prompt="Press Enter to exit...")
@@ -227,16 +233,18 @@ Notes on `show()`:
 Matplotlib needs a GUI "backend" (a windowing system bridge) to open interactive
 plot windows and keep them responsive.
 
-The simplest cross-platform pattern (works in IPython too) for your code is
-to set the backend explicitly before importing `matplotlib.pyplot`:
+Reference: Matplotlib docs (https://matplotlib.org/stable/users/explain/figure/backends.html)
+
+The simplest cross-platform pattern (works in IPython too) is to set the backend in the code
+before importing `matplotlib.pyplot`:
 
 ```python
 import matplotlib
 from mpl_nonblock import recommended_backend
 
-# `override=True` means "use my platform recommendation even if something already
-# selected a backend in this session".
-matplotlib.use(recommended_backend(override=True), force=True)
+# `override=True` means "use my platform recommendation even if something already selected
+# a backend in this session (e.g., via magic %matplotlib)".
+matplotlib.use(recommended_backend(override=False), force=False)
 import matplotlib.pyplot as plt
 ```
 
@@ -246,9 +254,8 @@ Then run your code in IPython:
 %run -i your_code.py
 ```
 
-Note the flag `-i` stands for interactive and allows you to share the same
-variable space as your code. You may skip it if you mean to keep variable scope
-confined to your code.
+Note the flag `-i` stands for interactive and allows you to share the same variable space
+as your code. You may skip it if you mean to keep variable scope confined to your code.
 
 Alternatively, if you prefer, you can skip `matplotlib.use(...)` in your code and
 avoid defining the backend. Instead, select a backend in IPython with the
@@ -263,14 +270,28 @@ before running your code with:
 %run -i your_code.py
 ```
 
-You can set the backend either in code (`matplotlib.use(...)`) or in IPython
-(`%matplotlib ...`). If you use both, the backend that your code selects depends on
-what `recommended_backend()` returns.
+Hence, you can set the backend either in code (`matplotlib.use(...)`) or in IPython
+(`%matplotlib ...`). However, if you use both, the backend that your code selects depends on
+what you provide to `matplotlib.use()` and, therefore, what `recommended_backend()` returns.
 
 If a backend is already set, `recommended_backend()` returns the backend that is set
-(e.g. via `%matplotlib ...` / `MPLBACKEND`); this is the default behavior. However,
-with `override=True`, it returns the platform recommendation, regardless of whether
-a backend was already set.
+(e.g. via `%matplotlib ...` / environment variable `MPLBACKEND`); this is the default behavior.
+However, with `override=True`, it always returns the platform recommendation, regardless of
+whether a backend was already set.
+
+About `matplotlib.use(..., force=...)`:
+
+- `force=False` (recommended) is the safe default. If a backend is already selected,
+  Matplotlib will typically keep it.
+- `force=True` asks Matplotlib to switch even if a backend was selected earlier. This can be
+  useful very early in program startup, but it can also be confusing (or cause side effects)
+  if `matplotlib.pyplot` is already imported (e.g., existing figures may be closed).
+
+Recommended practice:
+
+- In scripts, set the backend once, early, before importing `matplotlib.pyplot`.
+- In IPython, if you want to override what the script would pick, use `%matplotlib ...`
+  and keep `recommended_backend(override=False)` in code.
 
 ## API Overview
 
