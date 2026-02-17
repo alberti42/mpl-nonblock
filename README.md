@@ -23,12 +23,13 @@ hidden state over time.
 
 ## What You Get
 
- - Stable window reuse (Matplotlib-native): use `plt.subplots(num=..., clear=...)` to
-   keep reusing the same OS window (stable position) across runs in the same process.
-- Drop-in `plt.show()` replacement: `show()` defaults to nonblocking behavior
-  (`block=False`) so your prompt stays responsive.
-- Explicit nonblocking refresh primitive: `refresh(fig)` is the "movie frame" helper
-  (update artists, then call `refresh(fig)` to process GUI events).
+  - Stable window reuse (Matplotlib-native): use `plt.subplots(num=..., clear=...)` to
+    keep reusing the same OS window (stable position) across runs in the same process.
+ - Nonblocking refresh for loops: call `refresh(fig)` after you changed what is plotted
+   (e.g. after `ax.plot(...)`, `ax.cla()`, `line.set_ydata(...)`, etc.). This keeps the
+   figure window responsive and lets you update many figures in one run.
+ - Optional convenience `show()`: a small wrapper around Matplotlib `plt.show()` that
+   defaults to nonblocking behavior (and supports `show(block=True)` at the end of a script).
 - Best-effort window raising (optional): `refresh(fig, raise_window=True)` attempts
   to bring the figure window to the front on supported backends.
 - Diagnostics: `mpl-nonblock-diagnose` prints a small JSON blob that usually makes
