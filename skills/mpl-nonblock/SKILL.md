@@ -1,45 +1,44 @@
 ---
 name: mpl-nonblock
-description: Integrate mpl-nonblock for tagged Matplotlib windows and nonblocking figure refresh in interactive Python sessions.
+description: Integrate mpl-nonblock for nonblocking Matplotlib workflows in IPython-driven, script-based exploration.
 license: MIT
 metadata:
   author: Andrea Alberti (2026)
   package_repo: https://github.com/alberti42/mpl-nonblock
+  version: 1.1.0
 ---
 
 # Skill: mpl-nonblock
 
 Use this skill when integrating `mpl-nonblock` into Python code that uses
-Matplotlib interactively (IPython, Jupyter, REPL scripts). It provides tagged
-window reuse and nonblocking figure refresh.
+Matplotlib from a script-based workflow driven by IPython (re-run scripts, keep
+multiple native windows responsive).
+
+This package complements Matplotlib. It does not replace Matplotlib APIs for
+creating figures; it provides small helpers to make nonblocking workflows pleasant.
 
 ## Agent defaults (important)
 
-- **Assume mpl-nonblock is required** for plotting in the target codebase.
-- **Do not implement matplotlib fallbacks** unless the user explicitly requests
-  an optional dependency mode.
-- **Avoid duplicated plotting code**. The plotting logic must be written once.
-  If a fallback is needed (only if the user asks), implement a small compatibility
-  layer that provides the same function names (`subplots`, `show`) so the same
-  plot code runs unchanged.
-- **Ask about holding windows open** at program end for non-interactive runs
-  (otherwise figures may close immediately when the process exits).
+- **Assume Matplotlib is available**. `mpl-nonblock` is a Matplotlib companion.
+- **Keep integration explicit** (no backend guessing, no large fallback stacks).
+- **Avoid duplicated plotting code**. Write plotting once; call `refresh(fig)` or
+  `show()` to keep windows responsive.
+- **Ask about terminal-run behavior**: should scripts call `show(block=True)` at
+  the end to keep windows open?
 
 Suggested question to ask the user (only when relevant):
 
 - "When the script is run non-interactively (e.g. `python script.py`), should it
   wait once at the end (press Enter) to keep plot windows open?"
 
-## Install
+## Install (pin recommended)
 
 Only install if the user explicitly asks for it; the package may already be available in the environment. Ask the user whether a specific release should be pinned (recommended for reproducibility and to avoid future incompatibilities). If unsure, prefer pinning the latest known-good release.
 
-# Pinned release (recommended)
-
 ```bash
-pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git@v1.0.0"
-# or
-uv pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git@v1.0.0"
+uv pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git@1.1.0"
+# or (if `uv` is not available)
+pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git@1.1.0"
 ```
 
 # Unpinned (installs current default-branch HEAD; not recommended for reproducibility)
@@ -48,47 +47,47 @@ uv pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git
 pip install "mpl-nonblock @ git+https://github.com/alberti42/mpl-nonblock.git"
 ```
 
-## Critical Rule
+## Backend Selection (explicit)
 
-`ensure_backend()` **must** be called before `import matplotlib.pyplot`.
-If `pyplot` is already imported, backend switching is impossible.
+Backend selection is intentionally explicit:
 
-Practical implication: call `ensure_backend()` at the top of your plotting code,
-before importing `matplotlib.pyplot` anywhere.
+- In IPython: use `%matplotlib ...` (e.g. `%matplotlib macosx` on macOS, `%matplotlib tk` on Linux).
+- In scripts: call `matplotlib.use(...)` before importing `matplotlib.pyplot`.
+
+For cross-platform scripts:
+
+```python
+import matplotlib
+from mpl_nonblock import recommended_backend
+
+matplotlib.use(recommended_backend(), force=True)
+import matplotlib.pyplot as plt
+```
 
 ## API Reference
 
-### `ensure_backend(preferred=None, *, fallbacks=None, honor_user=True)`
+### `recommended_backend(macos="macosx", linux="TkAgg", windows="TkAgg", other="TkAgg") -> str`
 
-Best-effort GUI backend selection. Call once, early.
+Returns a backend name recommendation for `sys.platform`. This does not call
+`matplotlib.use()`; it keeps backend selection explicit.
 
-- **Default policy** (when `preferred` is `None`):
-  - macOS: tries `macosx`, falls back to `TkAgg`
-  - Linux: tries `QtAgg`, falls back to `TkAgg`
-- **`honor_user=True`** (default): does not override `MPLBACKEND` env var or an
-  already-active GUI backend.
-- Returns a `BackendStatus` dataclass (`backend`, `selected`, `can_switch`,
-  `tried`, `reason`).
+### `refresh(fig, *, pause=0.001, in_foreground=False) -> ShowStatus`
 
-### `subplots(tag, *, clear=True, nrows=1, ncols=1, **kwargs)`
+Nonblocking refresh for a specific figure (useful in loops).
 
-Create or reuse a figure keyed by the string `tag` (maps to Matplotlib `num=`).
-Reusing the same tag keeps the OS window in the same position across reruns.
+- Call it after you changed what is plotted (after `ax.plot(...)`, `ax.cla()`,
+  `line.set_ydata(...)`, etc.).
+- `in_foreground=True` tries to bring the window to the foreground (best-effort,
+  backend-dependent).
 
-- `clear=True`: clears the figure before returning (default).
-- Extra `**kwargs` are forwarded to `plt.subplots` (e.g. `figsize`, `constrained_layout`).
-- Returns `(fig, ax)` just like `plt.subplots`.
+### `show(*, block=False, pause=0.001) -> ShowStatus`
 
-### `show(fig, *, nonblocking=True, raise_window=False, pause=0.001)`
+Drop-in replacement for `matplotlib.pyplot.show(block=...)` with a different default:
 
-Display/refresh a figure.
-
-- `nonblocking=True` (default): uses `ion` + `show(block=False)` + `pause`
-  recipe. Keeps the prompt responsive.
-- `raise_window=True`: attempts to bring the window to front (backend-dependent).
-- On non-GUI backends (Agg, inline): safely does nothing (no warnings).
-- Returns a `ShowStatus` dataclass (`backend`, `nonblocking_requested`,
-  `nonblocking_used`, `reason`).
+- defaults to `block=False`.
+- `show(block=False)` is a global "GUI tick" (pumps GUI events and therefore affects
+  all open figures).
+- `show(block=True)` is the terminal-run fallback to keep windows open at program end.
 
 ### `is_interactive()`
 
@@ -102,114 +101,39 @@ Returns a dict with backend info, IPython state, and environment variables
 
 ## Patterns
 
-### Clean integration (no duplication)
-
-Write plotting code once using `mpl_nonblock.subplots(...)` and
-`mpl_nonblock.show(...)`. Do not branch the actual plotting logic.
-
-If and only if the user explicitly requests a fallback mode, prefer a small
-alias layer that keeps function names consistent, instead of duplicating plots:
+### Loop updates (recommended)
 
 ```python
-try:
-    from mpl_nonblock import ensure_backend, subplots, show
-    ensure_backend()  # before any pyplot import
-except ImportError:
-    import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-    def subplots(tag, *, clear=True, **kwargs):
-        return plt.subplots(num=tag, clear=clear, **kwargs)
+from mpl_nonblock import refresh
 
-    def show(_fig, *, nonblocking=True, **kwargs):
-        plt.show()
-```
+fig1, ax1 = plt.subplots(num="A", clear=True)
+fig2, ax2 = plt.subplots(num="B", clear=True)
 
-### Minimal nonblocking plot
+for k in range(200):
+    ax1.cla(); ax1.plot([0, 1], [0, k])
+    ax2.cla(); ax2.plot([0, 1], [k, 0])
 
-```python
-from mpl_nonblock import ensure_backend, subplots, show
-
-ensure_backend()  # before any pyplot import
-
-fig, ax = subplots("My Plot", figsize=(8, 4))
-ax.plot([1, 2, 3], [1, 4, 9])
-show(fig)
-```
-
-### Multiple tagged windows (stable positions)
-
-```python
-from mpl_nonblock import ensure_backend, subplots, show
-
-ensure_backend()
-
-fig1, ax1 = subplots("Signal", clear=True, figsize=(10, 4))
-ax1.plot(t, signal)
-show(fig1)
-
-fig2, ax2 = subplots("Spectrum", clear=True, figsize=(10, 4))
-ax2.plot(freq, magnitude)
-show(fig2)
-```
-
-Each call to `subplots("Signal", ...)` reuses the same OS window, so it stays
-where the user positioned it.
-
-### Update loop (live refresh)
-
-```python
-from mpl_nonblock import ensure_backend, subplots, show
-
-ensure_backend()
-
-for i in range(100):
-    fig, ax = subplots("Live", clear=True)
-    ax.plot(data[: i + 1])
-    ax.set_title(f"Step {i}")
-    show(fig)
+    refresh(fig1)
+    refresh(fig2)
 ```
 
 ### Script that works both interactively and standalone
 
 ```python
-from mpl_nonblock import ensure_backend, is_interactive, subplots, show
+import matplotlib.pyplot as plt
 
-ensure_backend()
+from mpl_nonblock import is_interactive, refresh, show
 
-fig, ax = subplots("Result", clear=True)
+fig, ax = plt.subplots(num="Result", clear=True)
 ax.plot(x, y)
 
-if is_interactive():
-    show(fig, nonblocking=True)
-else:
-    # Non-interactive script runs: nonblocking windows would close when the
-    # process exits. Hold once at the end.
-    show(fig, nonblocking=True)
-    input("Press Enter to close plots and exit...")
-```
+refresh(fig)
 
-### Specifying a preferred backend
-
-```python
-from mpl_nonblock import ensure_backend
-
-status = ensure_backend(preferred="QtAgg", fallbacks=["TkAgg"])
-if not status.selected:
-    print(f"Could not switch backend: {status.reason}")
-```
-
-### Subplots with multiple axes
-
-```python
-from mpl_nonblock import ensure_backend, subplots, show
-
-ensure_backend()
-
-fig, axes = subplots("Grid", nrows=2, ncols=2, figsize=(10, 8),
-                     constrained_layout=True)
-for ax, data in zip(axes.flat, datasets):
-    ax.plot(data)
-show(fig)
+if not is_interactive():
+    # Terminal-run fallback: keep windows open after the script ends.
+    show(block=True)
 ```
 
 ## Troubleshooting
@@ -231,5 +155,3 @@ Common fixes:
 - **IPython on macOS**: run `%matplotlib macosx` before your script.
 - **IPython on Linux**: run `%matplotlib qt` (or `%matplotlib tk`).
 - **Headless / Agg backend**: no window can open; use `fig.savefig(...)` instead.
-- **macOS + `simple_prompt`**: start IPython with
-  `ipython --TerminalInteractiveShell.simple_prompt=False`.
