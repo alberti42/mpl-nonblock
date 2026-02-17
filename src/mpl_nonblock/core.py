@@ -12,6 +12,7 @@ from .backends import _backend_str, _is_gui_backend
 __all__ = [
     "ShowStatus",
     "diagnostics",
+    "hold_windows",
     "is_interactive",
     "refresh",
     "show",
@@ -162,6 +163,66 @@ def show(*, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
         nonblocking_used=True,
         reason="nonblocking show",
     )
+
+
+def hold_windows(*, poll: float = 0.05, prompt: str | None = None) -> None:
+    """Keep Matplotlib windows alive at the end of a terminal-run script.
+
+    This is a convenience for the common pattern:
+
+    - you used `refresh(fig)` / `show(block=False)` during the script
+    - when the script ends, the Python process would exit and windows would close
+
+    `hold_windows()` waits until the user presses Enter or all windows are closed,
+    while keeping the GUI responsive.
+    """
+
+    import threading
+
+    import matplotlib.pyplot as plt
+
+    backend = _backend_str()
+    if not _is_gui_backend(backend):
+        return
+
+    if prompt is not None:
+        print(prompt, flush=True)
+
+    entered = threading.Event()
+
+    def _wait_for_enter() -> None:
+        try:
+            sys.stdin.readline()
+        except Exception:
+            return
+        entered.set()
+
+    threading.Thread(target=_wait_for_enter, daemon=True).start()
+
+    def _any_figures_open() -> bool:
+        try:
+            return bool(plt.get_fignums())
+        except Exception:
+            return False
+
+    while not entered.is_set() and _any_figures_open():
+        # Keep processing GUI events without repeatedly calling plt.show().
+        try:
+            fignums = plt.get_fignums()
+            fig = None
+            if fignums:
+                fig = plt.figure(fignums[0])
+            start_loop = (
+                getattr(getattr(fig, "canvas", None), "start_event_loop", None)
+                if fig is not None
+                else None
+            )
+            if callable(start_loop):
+                start_loop(poll)
+            else:
+                plt.pause(poll)
+        except Exception:
+            plt.pause(poll)
 
 
 def diagnostics() -> dict[str, Any]:

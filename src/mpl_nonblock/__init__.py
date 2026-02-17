@@ -10,7 +10,7 @@ except ModuleNotFoundError as e:  # pragma: no cover
     ) from e
 
 from .backends import recommended_backend
-from .core import diagnostics, is_interactive, refresh, show
+from .core import diagnostics, hold_windows, is_interactive, refresh, show
 
 try:
     __version__ = version("mpl-nonblock")
@@ -20,6 +20,7 @@ except PackageNotFoundError:  # pragma: no cover
 __all__ = [
     "__version__",
     "diagnostics",
+    "hold_windows",
     "is_interactive",
     "recommended_backend",
     "refresh",

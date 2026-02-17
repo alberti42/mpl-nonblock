@@ -130,7 +130,11 @@ def main() -> None:
     # bt preventing exiting the code too immediately
     # after the last frame of the movie.
     if not is_interactive():
-        show(block=True)
+        # Terminal-run fallback: keep windows open after the script ends.
+        # (This keeps the GUI responsive while waiting for Enter.)
+        from mpl_nonblock import hold_windows
+
+        hold_windows(prompt="Press Enter to exit...")
 
 
 if __name__ == "__main__":
