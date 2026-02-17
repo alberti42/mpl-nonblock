@@ -187,6 +187,14 @@ from mpl_nonblock import show
 show(block=True)
 ```
 
+Why both `refresh(fig)` and `show(block=False)`?
+
+- `refresh(fig)` is explicit and figure-focused: you updated that figure, so you refresh
+  that figure. It is also the place for figure-specific options like `raise_window=True`.
+- `show(block=False)` is a global "GUI tick": update one or many figures, then call
+  it once to keep all open windows responsive. This can be convenient in loops when you
+  don’t want to pass figure handles around.
+
 ## Choosing a Backend
 
 Matplotlib needs a GUI "backend" (a windowing system bridge) to open interactive
