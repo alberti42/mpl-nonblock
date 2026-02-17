@@ -9,5 +9,6 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+*.sublime-project
 *.sublime-workspace
 *.md
