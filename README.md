@@ -271,20 +271,39 @@ before running your code with:
 ```
 
 Hence, you can set the backend either in code (`matplotlib.use(...)`) or in IPython
-(`%matplotlib ...`). If you use both, the backend your code selects depends on what
-`recommended_backend()` returns.
+(`%matplotlib ...`). If you use both and in conjunction with `recommended_backend()`, the
+backend your code selects depends on what `recommended_backend()` returns.
 
 By default (`respect_existing=True`), `recommended_backend()` returns an already-selected
 backend (e.g. via `%matplotlib ...` / environment variable `MPLBACKEND`). Set
-`respect_existing=False` to always return the platform recommendation.
+`respect_existing=False` to always return the platform recommendation defined by your script.
 
 About `matplotlib.use(..., force=...)`:
 
-- `force=True` (recommended) raises an error if the backend cannot be set up.
+- `force=True` (recommended) raises an error if the backend cannot be set up (either because
+  it fails to import, or because an incompatible GUI interactive framework is already running).
 - `force=False` silently ignores failures.
 
-`force` does not mean "force a switch". Switching backends after importing
-`matplotlib.pyplot` can close existing figures (Matplotlib may call `plt.close('all')`).
+Thus, `force` does not mean "force a switch".
+
+In plain terms: switching between different interactive GUI backends only works
+before any GUI toolkit has started handling events. Once Matplotlib has already
+opened a GUI window using one GUI toolkit (for example Tk), you cannot switch
+mid-session to a different GUI toolkit (for example GTK or Qt). If you need a
+different interactive backend, start a fresh Python/IPython session and select the
+backend before creating any figures.
+
+Practical note: avoid changing the GUI toolkit backend after importing
+`matplotlib.pyplot`. At that point Matplotlib cannot switch to a different GUI toolkit.
+
+If you need it in your workflow, you can still switch to non-interactive backends
+such as `pdf` or `svg` to export figures to files. This will not affect opened figures.
+
+You can then switch back to the originally selected GUI toolkit backend (e.g.
+`TkAgg`), but not to a different GUI toolkit.
+
+Alternatively, you can simply use `fig.savefig("plot.svg")`,
+`fig.savefig("plot.pdf")`, etc. without changing the backend.
 
 Recommended practice:
 
