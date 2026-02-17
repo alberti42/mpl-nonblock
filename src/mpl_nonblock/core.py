@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Literal
 
 from ._helpers import _WARNED_ONCE, _in_ipython, is_interactive, _warn_once
 from .backends import _backend_str, _is_gui_backend
@@ -17,6 +18,9 @@ __all__ = [
     "refresh",
     "show",
 ]
+
+
+_PROMPT_DEFAULT = object()
 
 
 @dataclass(frozen=True)
@@ -168,7 +172,8 @@ def show(*, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
 def hold_windows(
     *,
     poll: float = 0.05,
-    prompt: str | None = None,
+    prompt: str | None | object = _PROMPT_DEFAULT,
+    trigger: Literal["AnyKey", "Enter"] = "AnyKey",
     only_if_tty: bool = True,
 ) -> None:
     """Keep Matplotlib windows alive at the end of a terminal-run script.
@@ -178,12 +183,15 @@ def hold_windows(
     - you used `refresh(fig)` / `show(block=False)` during the script
     - when the script ends, the Python process would exit and windows would close
 
-    `hold_windows()` waits until the user presses Enter or all windows are closed,
-    while keeping the GUI responsive.
+    `hold_windows()` waits until the user presses Enter / any key (configurable)
+    or all windows are closed, while keeping the GUI responsive.
 
     Parameters:
     - poll: seconds to wait between GUI event processing steps.
-    - prompt: optional message printed before waiting.
+    - prompt: message printed before waiting.
+      - If omitted, a default prompt is printed based on `trigger`.
+      - If None, nothing is printed.
+    - trigger: "AnyKey" (default) or "Enter".
     - only_if_tty: if True (default), do nothing when stdin is not a TTY.
       This avoids blocking in non-interactive environments (CI, piped input).
     """
@@ -203,8 +211,17 @@ def hold_windows(
         except Exception:
             return
 
+    if trigger not in ("Enter", "AnyKey"):
+        raise ValueError(f"Unknown trigger: {trigger!r}. Expected 'Enter' or 'AnyKey'.")
+
+    if prompt is _PROMPT_DEFAULT:
+        prompt = (
+            "Press any key to exit..."
+            if trigger == "AnyKey"
+            else "Press Enter to exit..."
+        )
     if prompt is not None:
-        print(prompt, flush=True)
+        print(str(prompt), flush=True)
 
     entered = threading.Event()
 
@@ -215,7 +232,103 @@ def hold_windows(
             return
         entered.set()
 
-    threading.Thread(target=_wait_for_enter, daemon=True).start()
+    def _make_anykey_checker() -> tuple[
+        contextlib.AbstractContextManager[None], Callable[[], bool], bool
+    ]:
+        """Return (context_manager, checker) for 'any key' detection.
+
+        The context manager exists to restore terminal settings on POSIX.
+        """
+
+        # Windows (msvcrt) path.
+        if sys.platform.startswith("win"):
+            try:
+                import msvcrt  # type: ignore
+            except Exception as e:
+                _warn_once(
+                    "hold_windows:anykey_import",
+                    "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
+                    e,
+                )
+                return contextlib.nullcontext(), lambda: False, False
+
+            def _pressed() -> bool:
+                try:
+                    kbhit = getattr(msvcrt, "kbhit", None)
+                    getwch = getattr(msvcrt, "getwch", None)
+                    if callable(kbhit) and callable(getwch) and kbhit():
+                        getwch()
+                        return True
+                except Exception:
+                    return False
+                return False
+
+            return contextlib.nullcontext(), _pressed, True
+
+        # POSIX path.
+        try:
+            import select
+            import termios
+            import tty
+        except Exception as e:
+            _warn_once(
+                "hold_windows:anykey_import",
+                "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
+                e,
+            )
+            return contextlib.nullcontext(), lambda: False, False
+
+        try:
+            fd = sys.stdin.fileno()
+        except Exception as e:
+            _warn_once(
+                "hold_windows:anykey_fileno",
+                "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
+                e,
+            )
+            return contextlib.nullcontext(), lambda: False, False
+
+        @contextlib.contextmanager
+        def _cbreak() -> Any:
+            try:
+                old = termios.tcgetattr(fd)
+            except Exception:
+                old = None
+
+            try:
+                tty.setcbreak(fd)
+                yield
+            finally:
+                if old is not None:
+                    try:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                    except Exception:
+                        pass
+
+        def _pressed() -> bool:
+            try:
+                r, _, _ = select.select([sys.stdin], [], [], 0)
+                if r:
+                    sys.stdin.read(1)
+                    return True
+            except Exception:
+                return False
+            return False
+
+        return _cbreak(), _pressed, True
+
+    if trigger == "Enter":
+        threading.Thread(target=_wait_for_enter, daemon=True).start()
+        key_ctx: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
+        key_pressed = lambda: False
+    else:
+        key_ctx, key_pressed, supported = _make_anykey_checker()
+
+        # If AnyKey is not available, fall back to Enter semantics.
+        if not supported:
+            threading.Thread(target=_wait_for_enter, daemon=True).start()
+            key_ctx = contextlib.nullcontext()
+            key_pressed = lambda: False
 
     def _any_figures_open() -> bool:
         try:
@@ -223,24 +336,29 @@ def hold_windows(
         except Exception:
             return False
 
-    while not entered.is_set() and _any_figures_open():
-        # Keep processing GUI events without repeatedly calling plt.show().
-        try:
-            fignums = plt.get_fignums()
-            fig = None
-            if fignums:
-                fig = plt.figure(fignums[0])
-            start_loop = (
-                getattr(getattr(fig, "canvas", None), "start_event_loop", None)
-                if fig is not None
-                else None
-            )
-            if callable(start_loop):
-                start_loop(poll)
-            else:
+    with key_ctx:
+        while not entered.is_set() and _any_figures_open():
+            if trigger == "AnyKey" and key_pressed():
+                entered.set()
+                break
+
+            # Keep processing GUI events without repeatedly calling plt.show().
+            try:
+                fignums = plt.get_fignums()
+                fig = None
+                if fignums:
+                    fig = plt.figure(fignums[0])
+                start_loop = (
+                    getattr(getattr(fig, "canvas", None), "start_event_loop", None)
+                    if fig is not None
+                    else None
+                )
+                if callable(start_loop):
+                    start_loop(poll)
+                else:
+                    plt.pause(poll)
+            except Exception:
                 plt.pause(poll)
-        except Exception:
-            plt.pause(poll)
 
 
 def diagnostics() -> dict[str, Any]:

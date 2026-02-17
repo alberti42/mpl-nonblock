@@ -140,7 +140,9 @@ def main() -> None:
         # Robust: keep the GUI responsive while waiting.
         from mpl_nonblock import hold_windows
 
-        hold_windows(prompt="Press Enter to exit...")
+        # Default: exit on any key (prints a default prompt).
+        # If you prefer Enter, use: hold_windows(trigger="Enter")
+        hold_windows()
 
 
 if __name__ == "__main__":
@@ -337,9 +339,10 @@ Import name is `mpl_nonblock`:
  - `diagnostics()`
    - Returns a small dict (backend, interactive detection, headless hints).
 
- - `hold_windows(*, poll=0.05, prompt=None, only_if_tty=True)`
-   - Terminal-run fallback: keep windows open after a script ends, while keeping the GUI responsive.
-   - Returns when the user presses Enter or when all figure windows are closed.
+  - `hold_windows(*, poll=0.05, prompt=..., trigger="AnyKey", only_if_tty=True)`
+    - Terminal-run fallback: keep windows open after a script ends, while keeping the GUI responsive.
+    - Returns when the user presses any key (or Enter with `trigger="Enter"`) or when all figure windows are closed.
+    - If `prompt` is omitted, a default prompt is printed based on `trigger`. Use `prompt=None` to print nothing.
 
 ## Demos
 
