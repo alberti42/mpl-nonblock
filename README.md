@@ -57,23 +57,55 @@ This installs the optional Qt dependency (`PySide6`).
 
 ## Quickstart
 
-Backend selection must happen before importing `matplotlib.pyplot`.
+This package is meant for running plotting code from scripts (files), and then
+re-running those scripts smoothly while keeping multiple figure windows responsive.
 
-[TODO] Fix the example; we need to create two figures; it makes it clearer how the nonblock behavior works.
+1) Put your plotting code in a file, e.g. `your_script.py`:
 
 ```python
-import matplotlib
-from mpl_nonblock import recommended_backend, show
+from __future__ import annotations
 
-matplotlib.use(recommended_backend(), force=True)  # must be before pyplot
+import time
+
 import matplotlib.pyplot as plt
 
-fig, ax = plt.subplots(num="Baseline", clear=True, figsize=(10, 5))
-ax.plot([1, 2, 3, 4])
-ax.set_ylabel("some numbers")
+from mpl_nonblock import is_interactive, refresh, show
 
-show()  # nonblocking by default
+
+def main() -> None:
+    fig1, ax1 = plt.subplots(num="A", clear=True)
+    fig2, ax2 = plt.subplots(num="B", clear=True)
+
+    for k in range(200):
+        ax1.cla(); ax1.plot([0, 1], [0, k])
+        ax2.cla(); ax2.plot([0, 1], [k, 0])
+
+        # Refresh each figure you updated.
+        refresh(fig1)
+        refresh(fig2)
+
+        time.sleep(0.02)
+
+    # If you run this as a script (not from IPython), keep windows open.
+    if not is_interactive():
+        show(block=True)
+
+
+if __name__ == "__main__":
+    main()
 ```
+
+2) In IPython, pick a backend for the session, then run the script:
+
+```python
+%matplotlib macosx  # macOS
+%matplotlib tk      # Linux/Windows
+
+%run -i your_script.py
+```
+
+For finer control over backend selection (including cross-platform `matplotlib.use(...)`)
+see `## Choosing a Backend`.
 
 ## How To Use `show()` vs `refresh()`
 
@@ -123,12 +155,12 @@ from mpl_nonblock import show
 show(block=True)
 ```
 
-## Recommended IPython Setup
+## Choosing a Backend
 
 Matplotlib needs a GUI "backend" (a windowing system bridge) to open interactive
 plot windows and keep them responsive.
 
-The simplest cross-platform pattern (works in IPython too) for your code is 
+The simplest cross-platform pattern (works in IPython too) for your code is
 to set the backend explicitly before importing `matplotlib.pyplot`:
 
 ```python
@@ -142,7 +174,7 @@ import matplotlib.pyplot as plt
 Then run your code in IPython:
 
 ```python
-%run -i your_script.py
+%run -i your_code.py
 ```
 
 Note the flag `-i` stands for interactive and allows you to share the same
@@ -150,16 +182,16 @@ variable space as your code. You may skip it if you mean to keep variable scope
 confined to your code.
 
 Alternatively, if you prefer, you can skip `matplotlib.use(...)` in your code and
-avoid defining the backend. Instead, select a backend in IPython using the
+avoid defining the backend. Instead, select a backend in IPython with the
 `%matplotlib` magic:
 
 - macOS: `%matplotlib macosx`
 - Linux: `%matplotlib qt` (fallback: `%matplotlib tk`)
 
-Then run scripts normally:
+before running your code with:
 
 ```python
-%run -i your_script.py
+%run -i your_code.py
 ```
 
 Note: `%matplotlib ...` selects the backend for the running IPython session. If you
