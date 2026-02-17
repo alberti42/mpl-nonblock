@@ -95,6 +95,21 @@ def _replace_all(path: Path, old: str, new: str) -> bool:
     return True
 
 
+def _replace_pinned_git_tag(path: Path, new_version: str) -> bool:
+    """Replace pinned git tag references like `@v1.2.3` with `@v<new_version>`.
+
+    We keep the Python package version as X.Y.Z, but git tags commonly use vX.Y.Z.
+    """
+
+    text = _read_text(path)
+    new_tag = f"@v{new_version}"
+    out = re.sub(r"@v\d+\.\d+\.\d+\b", new_tag, text)
+    if out == text:
+        return False
+    _write_text(path, out)
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Bump mpl-nonblock project version")
     g = p.add_mutually_exclusive_group(required=True)
@@ -137,11 +152,17 @@ def main(argv: list[str] | None = None) -> int:
         path = root / rel
         if not path.exists():
             continue
+        changed = False
         if _replace_all(path, f"@{tag_old}", f"@{tag_new}"):
-            updated.append(str(rel))
+            changed = True
+        # Also fix any stale pinned tag that doesn't match the immediate old version.
+        if _replace_pinned_git_tag(path, new):
+            changed = True
         if _replace_all(path, f"version: {old}", f"version: {new}"):
-            if str(rel) not in updated:
-                updated.append(str(rel))
+            changed = True
+
+        if changed:
+            updated.append(str(rel))
 
     print(f"pyproject.toml: {old} -> {new}")
     if updated:
