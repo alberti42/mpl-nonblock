@@ -125,9 +125,33 @@ show(block=True)
 
 ## Recommended IPython Setup
 
-Matplotlib interactivity depends on GUI backends and event loop integration.
+Matplotlib needs a GUI "backend" (a windowing system bridge) to open interactive
+plot windows and keep them responsive.
 
-In IPython, pick a GUI backend explicitly:
+The simplest cross-platform pattern (works in IPython too) for your code is 
+to set the backend explicitly before importing `matplotlib.pyplot`:
+
+```python
+import matplotlib
+from mpl_nonblock import recommended_backend
+
+matplotlib.use(recommended_backend(), force=True)
+import matplotlib.pyplot as plt
+```
+
+Then run your code in IPython:
+
+```python
+%run -i your_script.py
+```
+
+Note the flag `-i` stands for interactive and allows you to share the same
+variable space as your code. You may skip it if you mean to keep variable scope
+confined to your code.
+
+Alternatively, if you prefer, you can skip `matplotlib.use(...)` in your code and
+avoid defining the backend. Instead, select a backend in IPython using the
+`%matplotlib` magic:
 
 - macOS: `%matplotlib macosx`
 - Linux: `%matplotlib qt` (fallback: `%matplotlib tk`)
@@ -138,15 +162,9 @@ Then run scripts normally:
 %run -i your_script.py
 ```
 
-In plain Python scripts, select a backend before importing `matplotlib.pyplot`:
-
-```python
-import matplotlib
-from mpl_nonblock import recommended_backend
-
-matplotlib.use(recommended_backend(), force=True)
-import matplotlib.pyplot as plt
-```
+Note: `%matplotlib ...` selects the backend for the running IPython session. If you
+also call `matplotlib.use(...)` in code, the effective backend is whichever selection
+happens first (and `%matplotlib` may override your earlier choice).
 
 ## API Overview
 
