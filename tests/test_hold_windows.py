@@ -36,9 +36,10 @@ def test_hold_windows_exits_on_enter(monkeypatch: Any) -> None:
     import matplotlib.pyplot as plt
 
     from mpl_nonblock import core
+    from mpl_nonblock import terminal
 
     monkeypatch.setattr(core.sys.stdin, "isatty", lambda: True)
-    monkeypatch.setattr(core.sys.stdin, "readline", lambda: "\n")
+    monkeypatch.setattr(terminal.sys.stdin, "readline", lambda: "\n")
 
     # One fake figure exists, so hold_windows() starts waiting.
     monkeypatch.setattr(plt, "get_fignums", lambda: [1])
@@ -81,8 +82,10 @@ def test_hold_windows_exits_on_any_key_windows_path(monkeypatch: Any) -> None:
 
     from mpl_nonblock import core
 
+    from mpl_nonblock import terminal
+
     # Use the Windows (msvcrt) code path even on non-Windows test runners.
-    monkeypatch.setattr(core.sys, "platform", "win32")
+    monkeypatch.setattr(terminal.sys, "platform", "win32")
 
     # One fake figure exists.
     monkeypatch.setattr(plt, "get_fignums", lambda: [1])

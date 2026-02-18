@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import sys
-from typing import Any, Callable, Literal
+from typing import Literal
 
-from ._helpers import _warn_once
+from .terminal import _make_anykey_checker, _make_enterkey_checker
 
 __all__ = [
     "hold_windows",
@@ -70,118 +70,22 @@ def hold_windows(
     if prompt is not None:
         print(str(prompt), flush=True)
 
-    entered = threading.Event()
-
-    def _wait_for_enter() -> None:
-        try:
-            sys.stdin.readline()
-        except Exception:
-            return
-        entered.set()
-
-    def _make_anykey_checker() -> tuple[
-        contextlib.AbstractContextManager[None], Callable[[], bool], bool
-    ]:
-        """Return (context_manager, checker, supported) for 'any key' detection."""
-
-        # Windows (msvcrt) path.
-        if sys.platform.startswith("win"):
-            try:
-                import msvcrt  # type: ignore
-            except Exception as e:
-                _warn_once(
-                    "hold_windows:anykey_import",
-                    "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
-                    e,
-                )
-                return contextlib.nullcontext(), lambda: False, False
-
-            def _pressed() -> bool:
-                try:
-                    kbhit = getattr(msvcrt, "kbhit", None)
-                    getwch = getattr(msvcrt, "getwch", None)
-                    if callable(kbhit) and callable(getwch) and kbhit():
-                        getwch()
-                        return True
-                except Exception:
-                    return False
-                return False
-
-            return contextlib.nullcontext(), _pressed, True
-
-        # POSIX path.
-        try:
-            import select
-            import termios
-            import tty
-        except Exception as e:
-            _warn_once(
-                "hold_windows:anykey_import",
-                "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
-                e,
-            )
-            return contextlib.nullcontext(), lambda: False, False
-
-        try:
-            fd = sys.stdin.fileno()
-        except Exception as e:
-            _warn_once(
-                "hold_windows:anykey_fileno",
-                "mpl_nonblock.hold_windows: AnyKey trigger unavailable; falling back to Enter",
-                e,
-            )
-            return contextlib.nullcontext(), lambda: False, False
-
-        @contextlib.contextmanager
-        def _cbreak() -> Any:
-            try:
-                old = termios.tcgetattr(fd)
-            except Exception:
-                old = None
-
-            try:
-                tty.setcbreak(fd)
-                yield
-            finally:
-                if old is not None:
-                    try:
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-                    except Exception:
-                        pass
-
-        def _pressed() -> bool:
-            try:
-                r, _, _ = select.select([sys.stdin], [], [], 0)
-                if r:
-                    sys.stdin.read(1)
-                    return True
-            except Exception:
-                return False
-            return False
-
-        return _cbreak(), _pressed, True
-
-    if trigger == "Enter":
-        threading.Thread(target=_wait_for_enter, daemon=True).start()
-        key_ctx: contextlib.AbstractContextManager[None] = contextlib.nullcontext()
-        key_pressed = lambda: False
-    else:
+    if trigger == "AnyKey":
         key_ctx, key_pressed, supported = _make_anykey_checker()
         if not supported:
-            threading.Thread(target=_wait_for_enter, daemon=True).start()
-            key_ctx = contextlib.nullcontext()
-            key_pressed = lambda: False
+            key_ctx, key_pressed, _ = _make_enterkey_checker()
+    else:
+        key_ctx, key_pressed, _ = _make_enterkey_checker()
 
     with key_ctx:
-        while not entered.is_set():
+        while True:
             try:
                 if not plt.get_fignums():
                     return
             except Exception:
                 return
 
-            if trigger == "AnyKey" and key_pressed():
-                entered.set()
+            if key_pressed():
                 return
 
             # Keep processing GUI events without repeatedly calling plt.show().
