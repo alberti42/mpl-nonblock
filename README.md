@@ -11,7 +11,25 @@ produces more than one plot:
 - keep windows where you placed them: reuse the same OS windows across re-runs, so
   you can refresh their contents instead of constantly chasing new windows around
 
-Why a script-based workflow when you have Jupyter notebooks?
+## Motivation
+
+### What’s Missing In Matplotlib
+
+Matplotlib already supports reusing a window within a single Python process via a
+stable `num=...` argument (e.g. `plt.subplots(num="A", clear=True)`). This is very
+useful in IPython when you re-run code and want to keep updating the same windows.
+
+What Matplotlib does *not* provide out of the box is persisting window geometry
+(position + size) across separate runs of a script.
+
+This package adds that missing piece on macOS (see `track_position_size(...)`).
+
+Importantly, the geometry cache mechanism in this package is independent of Matplotlib's
+`num=...` reuse mechanics and does not rely on figure/window titles as identifiers.
+You provide an explicit `tag=` key, and the package restores + tracks window move/resize
+operations via backend events.
+
+### Why a script-based workflow when you have Jupyter notebooks?
 
 Notebooks are great for a first exploration. But once your work grows into a real
 project (multiple files, refactors, repeated runs, version control), scripts tend
@@ -33,8 +51,8 @@ On macOS, the `macosx` backend is built in and does not require extra installati
 
 ## What You Get
 
-- Stable window reuse (Matplotlib-native): use `plt.subplots(num=..., clear=...)` to
-  keep reusing the same OS window (stable position) across runs in the same process.
+- Window geometry persistence across runs (macOS): `track_position_size(fig, tag=...)`
+  restores position+size from a local cache and keeps it updated when you move/resize.
 - Terminal-run convenience `hold_windows()`: keep a script alive after creating
   figures while keeping the GUI responsive; exit when a key is pressed or when all
   figures are closed.
@@ -108,6 +126,13 @@ def main() -> None:
     fig1, ax1 = plt.subplots(num="A", clear=True)
     fig2, ax2 = plt.subplots(num="B", clear=True)
 
+    # macOS: persist window position+size across runs.
+    # (Silent no-op on unsupported backends / Matplotlib builds.)
+    from mpl_nonblock import track_position_size
+
+    track_position_size(fig1, tag="window_a")
+    track_position_size(fig2, tag="window_b")
+
     for k in range(200):
         ax1.cla(); ax1.plot([0, 1], [0, k])
         ax2.cla(); ax2.plot([0, 1], [k, 0])
@@ -168,6 +193,38 @@ Use Matplotlib primitives directly:
 
 When running from a terminal and you want to keep the process alive while the GUI stays
 responsive, use `hold_windows()`.
+
+## Window Geometry Persistence (macOS)
+
+Window geometry persistence currently targets the `macosx` backend and relies on
+upstream Matplotlib changes from PR https://github.com/matplotlib/matplotlib/pull/31172
+(manager APIs like `get_window_frame`/`set_window_frame` and move/resize end events).
+
+It is macOS-only for now because window geometry is backend-specific in Matplotlib.
+This is normal for Matplotlib: each GUI backend owns its native window and exposes
+different capabilities.
+
+The plan is to extend upstream support to the most common GUI backends (Qt/Tk/Gtk)
+and only then consider any cross-backend abstraction.
+
+Usage:
+
+```python
+tracker = track_position_size(fig, tag="my_window")
+```
+
+This restores the cached position+size (if present for this machine and tag) and then
+saves updates on `window_move_end_event` / `window_resize_end_event`.
+
+Cache location:
+- default: `.mpl-nonblock/window_geometry.json` in your project directory
+- override: set `MPL_NONBLOCK_CACHE_DIR`
+
+Demo:
+
+```bash
+make -f examples/Makefile geom-cache
+```
 
 ## Choosing a Backend
 
@@ -265,6 +322,13 @@ Import name is `mpl_nonblock`:
   - `raise_figure(fig)`
     - Best-effort: bring a native figure window to the foreground (backend-dependent).
 
+  - `track_position_size(fig, *, tag, restore_from_cache=True, cache_dir=None) -> WindowTracker | None`
+    - macOS: restore and track a figure window's position+size.
+    - Uses `tag` as an explicit cache key (no fallback keys).
+    - Restores once from `.mpl-nonblock/window_geometry.json` and saves on
+      `window_move_end_event` / `window_resize_end_event`.
+    - Returns a `WindowTracker` handle (or None on unsupported backends).
+
  - `is_interactive()`
   - Returns `True` when running inside IPython/Jupyter or a REPL-ish session
     (checks for IPython, `sys.ps1`, and `sys.flags.interactive`).
@@ -325,14 +389,11 @@ Use `fig.savefig(...)`.
 
 ## Design Notes / Limitations
 
-- Window position persistence comes from reusing the same native window
-  (Matplotlib figure `num=`). This persists within a single Python process/kernel.
-- This library does not attempt to persist window geometry across separate processes.
+- `raise_figure()` is best-effort and backend/OS dependent. Some window managers and OS
+  focus-stealing rules may ignore requests to raise/activate a window.
 - Backend switching is only possible before importing `matplotlib.pyplot`.
 - `hold_windows()` is meant for terminal-run scripts; it returns immediately when stdin
   is not a TTY (default `only_if_tty=True`).
-- Bringing a window to the foreground is backend-dependent. Matplotlib does not expose
-  a single portable API for this, so `raise_figure()` may be a no-op on some setups.
 
 ## License
 
