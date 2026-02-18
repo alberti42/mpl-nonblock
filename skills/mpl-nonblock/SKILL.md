@@ -15,21 +15,36 @@ Matplotlib from a script-based workflow driven by IPython (re-run scripts, keep
 multiple native windows responsive).
 
 This package complements Matplotlib. It does not replace Matplotlib APIs for
-creating figures; it provides small helpers to make nonblocking workflows pleasant.
+creating figures; it provides small helpers for:
+
+- persisting window position/size across script runs (macOS, `macosx` backend)
+- keeping terminal-run scripts alive while the GUI stays responsive
+
+## README cross-reference (agent hint)
+
+This skill is intentionally self-sufficient for integration steps.
+
+If you need more context/examples, you can search `README.md` by section headers.
+Useful grep targets:
+
+- `## Window Geometry Persistence (macOS)`
+- `## Quickstart`
+- `## API Overview`
+- `## Choosing a Backend`
 
 ## Agent defaults (important)
 
-- **Assume Matplotlib is available**. `mpl-nonblock` is a Matplotlib companion.
-- **Keep integration explicit** (no backend guessing, no large fallback stacks).
-- **Avoid duplicated plotting code**. Write plotting once; call `refresh(fig)` or
-  `show()` to keep windows responsive.
-- **Ask about terminal-run behavior**: should scripts call `show(block=True)` at
-  the end to keep windows open?
+- Assume Matplotlib is available. `mpl-nonblock` is a Matplotlib companion.
+- Keep integration explicit (no backend guessing, no large fallback stacks).
+- Do not wrap `matplotlib.pyplot.show()` or `plt.pause()` for the user. Use
+  Matplotlib primitives directly.
+- For geometry persistence: require an explicit `tag=` (no fallback keys).
+- For terminal-run scripts: prefer `hold_windows()` instead of ad-hoc `input()`.
 
 Suggested question to ask the user (only when relevant):
 
-- "When the script is run non-interactively (e.g. `python script.py`), should it
-  wait once at the end (press Enter) to keep plot windows open?"
+- "When running from a terminal, should the script wait at the end to keep plot
+  windows open? (Default behavior is 'any key'; Enter is also available.)"
 
 ## Install (pin recommended)
 
@@ -64,6 +79,9 @@ matplotlib.use(recommended_backend(), force=True)
 import matplotlib.pyplot as plt
 ```
 
+Note: window geometry persistence (`track_position_size`) is macOS-only and requires
+the `macosx` backend.
+
 ## API Reference
 
 ### `recommended_backend(macos="macosx", linux="TkAgg", windows="TkAgg", other="TkAgg", respect_existing=True) -> str`
@@ -75,33 +93,38 @@ it returns the current backend when `respect_existing=True`.
 
 This does not call `matplotlib.use()`; it keeps backend selection explicit.
 
-### `refresh(fig, *, pause=0.001, in_foreground=False) -> ShowStatus`
+### `track_position_size(fig, *, tag, restore_from_cache=True, cache_dir=None) -> WindowTracker | None`
 
-Nonblocking refresh for a specific figure (useful in loops).
+macOS-only window geometry persistence.
 
-- Call it after you changed what is plotted (after `ax.plot(...)`, `ax.cla()`,
-  `line.set_ydata(...)`, etc.).
-- `in_foreground=True` tries to bring the window to the foreground (best-effort,
-  backend-dependent).
+- `tag` is required and is the cache key (no fallback keys).
+- If `restore_from_cache=True` and a cached frame exists for the current machine,
+  it is applied immediately.
+- The geometry cache is updated when you finish moving or resizing the window
+  (move/resize end events).
+- Returns a `WindowTracker` handle, or `None` when the backend does not support it.
 
-### `show(*, block=False, pause=0.001) -> ShowStatus`
+This feature relies on upstream Matplotlib macOS manager APIs from:
+https://github.com/matplotlib/matplotlib/pull/31172
 
-Drop-in replacement for `matplotlib.pyplot.show(block=...)` with a different default:
+### `WindowTracker`
 
-- defaults to `block=False`.
-- `show(block=False)` is a global "GUI tick" (pumps GUI events and therefore affects
-  all open figures).
-- `show(block=True)` is the terminal-run fallback to keep windows open at program end.
+Small handle returned by `track_position_size`.
+
+- `disconnect()`: stop tracking by disconnecting callbacks.
+- `save_now()`: save current geometry if changed.
+- `set_frame(x, y, w, h)`, `set_position(x, y)`, `set_size(w, h)`: deterministic
+  manual operations (they also save).
+- `restore_position_and_size()`: re-apply cached geometry.
 
 ### `is_interactive()`
 
 Returns `True` when running inside IPython/Jupyter or a REPL-ish session.
 Checks IPython, `sys.ps1`, and `sys.flags.interactive`.
 
-### `diagnostics()`
+### `hold_windows(*, poll=0.05, prompt=..., trigger="AnyKey", only_if_tty=True) -> None`
 
-Returns a dict with backend info, IPython state, and environment variables
-(`DISPLAY`, `WAYLAND_DISPLAY`). Useful for debugging "nothing shows up" problems.
+Terminal-run helper that keeps the GUI responsive while waiting for a keypress.
 
 ## Patterns
 
@@ -110,8 +133,6 @@ Returns a dict with backend info, IPython state, and environment variables
 ```python
 import matplotlib.pyplot as plt
 
-from mpl_nonblock import refresh
-
 fig1, ax1 = plt.subplots(num="A", clear=True)
 fig2, ax2 = plt.subplots(num="B", clear=True)
 
@@ -119,8 +140,8 @@ for k in range(200):
     ax1.cla(); ax1.plot([0, 1], [0, k])
     ax2.cla(); ax2.plot([0, 1], [k, 0])
 
-    refresh(fig1)
-    refresh(fig2)
+    # Matplotlib-native GUI tick.
+    plt.pause(0.001)
 ```
 
 ### Script that works both interactively and standalone
@@ -128,34 +149,43 @@ for k in range(200):
 ```python
 import matplotlib.pyplot as plt
 
-from mpl_nonblock import is_interactive, refresh, show
+from mpl_nonblock import hold_windows, is_interactive
 
 fig, ax = plt.subplots(num="Result", clear=True)
 ax.plot(x, y)
 
-refresh(fig)
+plt.show(block=False)
 
 if not is_interactive():
-    # Terminal-run fallback: keep windows open after the script ends.
-    show(block=True)
+    # Terminal-run fallback: keep the GUI responsive while waiting.
+    hold_windows()
+
+### Persist window geometry (macOS)
+
+```python
+import matplotlib
+matplotlib.use("macosx")
+import matplotlib.pyplot as plt
+
+from mpl_nonblock import track_position_size
+
+fig, ax = plt.subplots()
+tracker = track_position_size(fig, tag="my_window")
+
+plt.show(block=False)
+```
+
+Move/resize the window. When you stop moving/resizing, the new geometry is saved.
+Re-run the script to restore the last geometry.
 ```
 
 ## Troubleshooting
-
-If nothing shows up, run:
-
-```python
-from mpl_nonblock import diagnostics
-print(diagnostics())
-```
-
-Or from the command line:
-
-```bash
-mpl-nonblock-diagnose
-```
 
 Common fixes:
 - **IPython on macOS**: run `%matplotlib macosx` before your script.
 - **IPython on Linux**: run `%matplotlib qt` (or `%matplotlib tk`).
 - **Headless / Agg backend**: no window can open; use `fig.savefig(...)` instead.
+
+For geometry persistence, ensure:
+- backend is `macosx`
+- your Matplotlib build includes https://github.com/matplotlib/matplotlib/pull/31172
