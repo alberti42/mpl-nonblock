@@ -2,12 +2,17 @@ from __future__ import annotations
 
 
 def main() -> None:
-    """Demo: persist window position+size across runs (macosx backend).
+    """Minimal example: persist window position+size across runs (macosx backend).
 
     Run this script twice:
     1) Move/resize the windows.
     2) Exit (close windows or press any key in the terminal).
     3) Run again: windows should restore to the last saved geometry.
+
+    This example keeps everything Matplotlib-native and adds a single explicit
+    call per window:
+
+        track_position_size(fig, tag="...")
     """
 
     import matplotlib
