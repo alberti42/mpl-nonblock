@@ -46,13 +46,32 @@ def main(argv: list[str] | None = None) -> int:
     dt = 1.0 / fps
     t0 = time.perf_counter()
 
+    behind = False
+
     for k in range(max(args.frames, 1)):
+        frame_t0 = time.perf_counter()
         phase = 0.15 * k
         line1.set_ydata([math.sin(omega * xi + phase) for xi in x])
         line2.set_ydata([math.cos(omega * xi + phase) for xi in x])
 
         # Event pump.
         plt.pause(max(args.pause, 0.0))
+
+        work_dt = time.perf_counter() - frame_t0
+        if not behind and work_dt > dt:
+            behind = True
+            approx_fps = 1.0 / work_dt if work_dt > 0 else 0.0
+            print(
+                f"[high_fps] cannot keep up: target={fps:.1f} fps (dt={dt * 1000.0:.2f} ms), "
+                f"work={work_dt * 1000.0:.2f} ms (~{approx_fps:.1f} fps)",
+                flush=True,
+            )
+        elif behind and work_dt < dt * 0.9:
+            behind = False
+            print(
+                f"[high_fps] recovered: now keeping up with target={fps:.1f} fps",
+                flush=True,
+            )
 
         # Pacing.
         next_t = t0 + (k + 1) * dt
