@@ -12,4 +12,3 @@ build/
 *.egg-info/
 *.sublime-project
 *.sublime-workspace
-*.md
