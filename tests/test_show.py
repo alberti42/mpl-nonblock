@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
+pytest.skip("mpl_nonblock.show/refresh removed", allow_module_level=True)
+
 import os
 from typing import Any
 

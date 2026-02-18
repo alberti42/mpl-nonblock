@@ -1,172 +1,17 @@
 from __future__ import annotations
 
 import contextlib
-import os
 import sys
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable, Literal
 
-from ._helpers import _WARNED_ONCE, _in_ipython, is_interactive, _warn_once
-from .backends import _backend_str, _is_gui_backend
+from ._helpers import _warn_once
 
 __all__ = [
-    "ShowStatus",
-    "diagnostics",
     "hold_windows",
-    "is_interactive",
-    "refresh",
-    "show",
 ]
 
 
 _PROMPT_DEFAULT = object()
-
-
-@dataclass(frozen=True)
-class ShowStatus:
-    """Small, explicit status object returned by `show()` / `refresh()`.
-
-    Why it exists:
-    - Matplotlib "show" behavior is backend- and environment-dependent (GUI vs Agg,
-      IPython vs script, headless vs desktop). Returning a status makes that behavior
-      observable without printing/logging.
-
-    How it is used:
-    - Internally: tests assert that we do *not* attempt GUI actions on non-GUI
-      backends.
-    - For users: you can branch on `nonblocking_used` / inspect `reason` when a
-      window does not appear or when debugging backend configuration.
-
-    This is part of the public API to provide a stable, structured alternative to
-    backend-specific warnings.
-    """
-
-    backend: str
-    nonblocking_requested: bool
-    nonblocking_used: bool
-    reason: str
-
-
-def refresh(
-    fig: Any,
-    *,
-    pause: float = 0.001,
-    in_foreground: bool = False,
-) -> ShowStatus:
-    """Nonblocking refresh of a specific figure.
-
-    This is the "movie frame" primitive: update artists, then call `refresh(fig)`
-    to pump the GUI event loop (via `plt.pause`). Optionally, try to bring the
-    figure window to the foreground via backend-specific hooks.
-
-    If you are updating multiple Axes in the same Figure (e.g. subplots), call this
-    once for that Figure.
-    """
-
-    import matplotlib.pyplot as plt
-
-    backend = _backend_str()
-    gui = _is_gui_backend(backend)
-
-    if not gui:
-        return ShowStatus(
-            backend=backend,
-            nonblocking_requested=True,
-            nonblocking_used=False,
-            reason="non-GUI backend; nothing to show",
-        )
-
-    try:
-        plt.pause(pause)
-    except Exception as e:
-        _warn_once(
-            "refresh:plt_pause",
-            "mpl_nonblock.refresh: plt.pause() failed; continuing",
-            e,
-        )
-
-    if in_foreground:
-        try:
-            from . import backends
-
-            backends.raise_figure(fig)
-        except Exception as e:
-            _warn_once(
-                "refresh:in_foreground",
-                "mpl_nonblock.refresh: in_foreground failed; continuing",
-                e,
-            )
-
-    return ShowStatus(
-        backend=backend,
-        nonblocking_requested=True,
-        nonblocking_used=True,
-        reason="nonblocking refresh",
-    )
-
-
-def show(*, block: bool | None = False, pause: float = 0.001) -> ShowStatus:
-    """Drop-in replacement for `matplotlib.pyplot.show()`.
-
-    Defaults to nonblocking behavior (`block=False`) by using `plt.pause(pause)`.
-
-    Note: we intentionally do not call `plt.show(block=False)` here. In practice it
-    is not needed for nonblocking refresh, and repeatedly calling `show()` can
-    cause focus-stealing behavior on some backends.
-
-    If you are writing a script (not IPython) and you want windows to stay open at
-    the end, use `show(block=True)`.
-
-    Implementation note: `show(block=False)` pumps the GUI event loop (via
-    `plt.pause`) and therefore affects all open figures. This is convenient as a
-    single "GUI tick", but it can add overhead if you have many figures.
-    """
-
-    import matplotlib.pyplot as plt
-
-    backend = _backend_str()
-    gui = _is_gui_backend(backend)
-
-    if not gui:
-        return ShowStatus(
-            backend=backend,
-            nonblocking_requested=block is not True,
-            nonblocking_used=False,
-            reason="non-GUI backend; nothing to show",
-        )
-
-    if block:
-        try:
-            plt.show()
-        except Exception as e:
-            _warn_once(
-                "show:plt_show",
-                "mpl_nonblock.show: plt.show() failed; continuing",
-                e,
-            )
-        return ShowStatus(
-            backend=backend,
-            nonblocking_requested=False,
-            nonblocking_used=False,
-            reason="blocking plt.show()",
-        )
-
-    try:
-        plt.pause(pause)
-    except Exception as e:
-        _warn_once(
-            "show:plt_pause",
-            "mpl_nonblock.show: plt.pause() failed; continuing",
-            e,
-        )
-
-    return ShowStatus(
-        backend=backend,
-        nonblocking_requested=True,
-        nonblocking_used=True,
-        reason="nonblocking show",
-    )
 
 
 def hold_windows(
@@ -176,15 +21,15 @@ def hold_windows(
     trigger: Literal["AnyKey", "Enter"] = "AnyKey",
     only_if_tty: bool = True,
 ) -> None:
-    """Keep Matplotlib windows alive at the end of a terminal-run script.
+    """Keep Matplotlib figures alive until the user continues.
 
-    This is a convenience for the common pattern:
+    This is a terminal-run convenience: at the end of a script that created
+    Matplotlib figures, prevent the Python process from exiting immediately while
+    keeping the GUI responsive.
 
-    - you used `refresh(fig)` / `show(block=False)` during the script
-    - when the script ends, the Python process would exit and windows would close
-
-    `hold_windows()` waits until the user presses Enter / any key (configurable)
-    or all windows are closed, while keeping the GUI responsive.
+    The function returns when:
+    - the user presses the configured key trigger, or
+    - all figures are closed (no fignums remain).
 
     Parameters:
     - poll: seconds to wait between GUI event processing steps.
@@ -200,16 +45,18 @@ def hold_windows(
 
     import matplotlib.pyplot as plt
 
-    backend = _backend_str()
-    if not _is_gui_backend(backend):
-        return
-
     if only_if_tty:
         try:
             if not sys.stdin.isatty():
                 return
         except Exception:
             return
+
+    try:
+        if not plt.get_fignums():
+            return
+    except Exception:
+        return
 
     if trigger not in ("Enter", "AnyKey"):
         raise ValueError(f"Unknown trigger: {trigger!r}. Expected 'Enter' or 'AnyKey'.")
@@ -235,10 +82,7 @@ def hold_windows(
     def _make_anykey_checker() -> tuple[
         contextlib.AbstractContextManager[None], Callable[[], bool], bool
     ]:
-        """Return (context_manager, checker) for 'any key' detection.
-
-        The context manager exists to restore terminal settings on POSIX.
-        """
+        """Return (context_manager, checker, supported) for 'any key' detection."""
 
         # Windows (msvcrt) path.
         if sys.platform.startswith("win"):
@@ -323,35 +167,29 @@ def hold_windows(
         key_pressed = lambda: False
     else:
         key_ctx, key_pressed, supported = _make_anykey_checker()
-
-        # If AnyKey is not available, fall back to Enter semantics.
         if not supported:
             threading.Thread(target=_wait_for_enter, daemon=True).start()
             key_ctx = contextlib.nullcontext()
             key_pressed = lambda: False
 
-    def _any_figures_open() -> bool:
-        try:
-            return bool(plt.get_fignums())
-        except Exception:
-            return False
-
     with key_ctx:
-        while not entered.is_set() and _any_figures_open():
+        while not entered.is_set():
+            try:
+                if not plt.get_fignums():
+                    return
+            except Exception:
+                return
+
             if trigger == "AnyKey" and key_pressed():
                 entered.set()
-                break
+                return
 
             # Keep processing GUI events without repeatedly calling plt.show().
             try:
                 fignums = plt.get_fignums()
-                fig = None
-                if fignums:
-                    fig = plt.figure(fignums[0])
-                start_loop = (
-                    getattr(getattr(fig, "canvas", None), "start_event_loop", None)
-                    if fig is not None
-                    else None
+                fig = plt.figure(fignums[0]) if fignums else None
+                start_loop = getattr(
+                    getattr(fig, "canvas", None), "start_event_loop", None
                 )
                 if callable(start_loop):
                     start_loop(poll)
@@ -359,22 +197,3 @@ def hold_windows(
                     plt.pause(poll)
             except Exception:
                 plt.pause(poll)
-
-
-def diagnostics() -> dict[str, Any]:
-    """Return a small diagnostics dictionary for troubleshooting.
-
-    Intended for CLI reporting (`mpl-nonblock-diagnose`) and bug reports.
-    """
-
-    out: dict[str, Any] = {}
-    out["sys.executable"] = sys.executable
-    out["sys.platform"] = sys.platform
-    out["cwd"] = str(Path.cwd())
-    out["interactive"] = is_interactive()
-    out["ipython"] = _in_ipython()
-    out["backend"] = _backend_str()
-    out["mplbackend_env"] = bool(os.environ.get("MPLBACKEND"))
-    out["display_env"] = os.environ.get("DISPLAY")
-    out["wayland_env"] = os.environ.get("WAYLAND_DISPLAY")
-    return out

@@ -35,15 +35,11 @@ On macOS, the `macosx` backend is built in and does not require extra installati
 
 - Stable window reuse (Matplotlib-native): use `plt.subplots(num=..., clear=...)` to
   keep reusing the same OS window (stable position) across runs in the same process.
-- Nonblocking refresh for loops: call `refresh(fig)` after you changed what is plotted
-  (e.g. after `ax.plot(...)`, `ax.cla()`, `line.set_ydata(...)`, etc.). This keeps the
-  figure window responsive and lets you update many figures in one run.
-- Optional convenience `show()`: a small wrapper around Matplotlib `plt.show()` that
-  defaults to nonblocking behavior (and supports `show(block=True)` at the end of a script).
-- Bring window to foreground (optional): `refresh(fig, in_foreground=True)` attempts
-  to bring the figure window to the front on supported backends.
-- Diagnostics: `mpl-nonblock-diagnose` prints a small JSON blob that usually makes
-  backend problems obvious.
+- Terminal-run convenience `hold_windows()`: keep a script alive after creating
+  figures while keeping the GUI responsive; exit when a key is pressed or when all
+  figures are closed.
+- Best-effort focus helper (optional): `raise_figure(fig)` attempts to bring a
+  native figure window to the foreground on supported backends.
 
 ## Requirements
 
@@ -105,7 +101,7 @@ import time
 
 import matplotlib.pyplot as plt
 
-from mpl_nonblock import is_interactive, refresh, show
+from mpl_nonblock import is_interactive
 
 
 def main() -> None:
@@ -116,9 +112,8 @@ def main() -> None:
         ax1.cla(); ax1.plot([0, 1], [0, k])
         ax2.cla(); ax2.plot([0, 1], [k, 0])
 
-        # Refresh each figure you updated.
-        refresh(fig1)
-        refresh(fig2)
+        # Matplotlib-native GUI tick (nonblocking).
+        plt.pause(0.001)
 
         # A short pause if you need to reduce the
         # the number of frames per second
@@ -161,74 +156,18 @@ if __name__ == "__main__":
 For finer control over backend selection (including cross-platform `matplotlib.use(...)`)
 see [Choosing a Backend](#choosing-a-backend).
 
-## How To Use `show()` vs `refresh()`
+## Matplotlib-Native Refresh
 
-Think in terms of Figures:
+This project intentionally avoids wrapping `matplotlib.pyplot.show()`.
 
-- Multiple subplots (multiple Axes) inside one Figure: call `refresh(fig)` once.
-- Multiple Figures: call `refresh(fig1)`, `refresh(fig2)`, ... for the figures you updated.
+Use Matplotlib primitives directly:
 
-Typical recipes:
+- Per-frame GUI event processing: `plt.pause(dt)`
+- Nonblocking show (global tick): `plt.show(block=False)`
+- Blocking at end of script: `plt.show(block=True)`
 
-1) IPython / interactive work (nonblocking updates)
-
-```python
-import matplotlib.pyplot as plt
-from mpl_nonblock import refresh
-
-fig, (ax1, ax2) = plt.subplots(2, 1, num="My Window", clear=True)
-ax1.plot([0, 1], [0, 1])
-ax2.plot([0, 1], [1, 0])
-
-refresh(fig)  # one figure refresh updates both subplots
-```
-
-2) Two figures updated in a loop ("movie")
-
-```python
-import matplotlib.pyplot as plt
-from mpl_nonblock import refresh
-
-fig1, ax1 = plt.subplots(num="A", clear=True)
-fig2, ax2 = plt.subplots(num="B", clear=True)
-
-for k in range(100):
-    ax1.cla(); ax1.plot([0, 1], [0, k])
-    ax2.cla(); ax2.plot([0, 1], [k, 0])
-
-    refresh(fig1)
-    refresh(fig2)
-```
-
-3) Script: keep windows open at the end
-
-```python
-from mpl_nonblock import show
-
-# ... create plots ...
-show(block=True)
-```
-
-Why both `refresh(fig)` and `show(block=False)`?
-
- - `refresh(fig)` is explicit and figure-focused: you updated that figure, so you refresh
-   that figure. It is also the place for figure-specific options like `in_foreground=True`.
- - `show(block=False)` is a global "GUI tick": update one or many figures, then call
-   it once to keep all open windows responsive. This can be convenient in loops when you
-   don’t want to pass figure handles around.
-
-Notes on `show()`:
-- Matplotlib-compatible: it mirrors `plt.show(block=...)`, with the only difference that
-  this package defaults to `block=False`.
-- Global behavior: `show(block=False)` affects all open figures (not a single figure).
-- Overhead: if you keep many figures open, a global GUI tick can be slower than
-  refreshing only the figure you touched.
-- Focus: `show()` does not intentionally bring windows to the foreground (use
-  `refresh(fig, in_foreground=True)` if you want that).
-- Blocking (fallback case): use `show(block=True)` only when you run the script from
-  the terminal (e.g. `python your_script.py`) and you want the windows to stay open
-  after the script ends. In IPython you typically do not want to block, because your
-  session remains alive and the generated figures do not disappear when your script ends.
+When running from a terminal and you want to keep the process alive while the GUI stays
+responsive, use `hold_windows()`.
 
 ## Choosing a Backend
 
@@ -323,26 +262,17 @@ Import name is `mpl_nonblock`:
       returns the current backend when `respect_existing=True`.
     - Does not call `matplotlib.use()`; backend selection stays explicit.
 
- - `show(*, block=False, pause=0.001)`
-  - Drop-in replacement for `matplotlib.pyplot.show()`.
-  - Defaults to `block=False` (nonblocking) and uses `pause` to pump GUI events.
-  - On non-GUI backends (e.g. `Agg`, inline) it does nothing (no warnings).
-
- - `refresh(fig, *, pause=0.001, in_foreground=False)`
-  - Nonblocking refresh of a specific figure (useful for animations / repeated updates).
-  - If `in_foreground=True`, it attempts to bring the window to the foreground (best-effort).
+  - `raise_figure(fig)`
+    - Best-effort: bring a native figure window to the foreground (backend-dependent).
 
  - `is_interactive()`
   - Returns `True` when running inside IPython/Jupyter or a REPL-ish session
     (checks for IPython, `sys.ps1`, and `sys.flags.interactive`).
 
- - `diagnostics()`
-   - Returns a small dict (backend, interactive detection, headless hints).
-
-  - `hold_windows(*, poll=0.05, prompt=..., trigger="AnyKey", only_if_tty=True)`
-    - Terminal-run fallback: keep windows open after a script ends, while keeping the GUI responsive.
-    - Returns when the user presses any key (or Enter with `trigger="Enter"`) or when all figure windows are closed.
-    - If `prompt` is omitted, a default prompt is printed based on `trigger`. Use `prompt=None` to print nothing.
+   - `hold_windows(*, poll=0.05, prompt=..., trigger="AnyKey", only_if_tty=True)`
+     - Terminal-run fallback: keep windows open after a script ends, while keeping the GUI responsive.
+     - Returns when the user presses any key (or Enter with `trigger="Enter"`) or when all figure windows are closed.
+     - If `prompt` is omitted, a default prompt is printed based on `trigger`. Use `prompt=None` to print nothing.
 
 ## Demos
 
@@ -393,23 +323,16 @@ python -m pytest
 2) If you are headless (no GUI): there is no window to show.
 Use `fig.savefig(...)`.
 
-### Diagnose
-
-```bash
-mpl-nonblock-diagnose
-```
-
-This prints a JSON blob (backend, interpreter, DISPLAY/WAYLAND hints).
-
 ## Design Notes / Limitations
 
 - Window position persistence comes from reusing the same native window
   (Matplotlib figure `num=`). This persists within a single Python process/kernel.
 - This library does not attempt to persist window geometry across separate processes.
 - Backend switching is only possible before importing `matplotlib.pyplot`.
-- On non-GUI backends (inline/Agg), `show()` cannot open windows.
+- `hold_windows()` is meant for terminal-run scripts; it returns immediately when stdin
+  is not a TTY (default `only_if_tty=True`).
 - Bringing a window to the foreground is backend-dependent. Matplotlib does not expose
-  a single portable API for this, so `in_foreground` may be a no-op on some setups.
+  a single portable API for this, so `raise_figure()` may be a no-op on some setups.
 
 ## License
 

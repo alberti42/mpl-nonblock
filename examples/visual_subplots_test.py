@@ -119,13 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     fig, ax = _mk_fig_ax(call=args.call, num=num, clear=clear)
     _plot_step(ax, step=1)
 
-    try:
-        from mpl_nonblock import refresh
-
-        refresh(fig, pause=0.001)
-    except Exception:
-        # Keep this script runnable even if the package isn't installed.
-        _process_events(fig, 0.001)
+    _process_events(fig, 0.001)
 
     print(f"step 1: fig.number={getattr(fig, 'number', None)!r} id(fig)={id(fig)}")
     _wait_for_enter_or_close(
@@ -139,12 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     fig2, ax2 = _mk_fig_ax(call=args.call, num=num, clear=clear)
     _plot_step(ax2, step=2)
 
-    try:
-        from mpl_nonblock import refresh
-
-        refresh(fig2, pause=0.001)
-    except Exception:
-        _process_events(fig2, 0.001)
+    _process_events(fig2, 0.001)
 
     print(f"step 2: fig.number={getattr(fig2, 'number', None)!r} id(fig)={id(fig2)}")
     print("If the window was reused, it should keep its position.")

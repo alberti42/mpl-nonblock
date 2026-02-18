@@ -7,74 +7,9 @@ from typing import Any
 from ._helpers import _warn_once
 
 __all__ = [
-    "_backend_str",
-    "_is_gui_backend",
     "recommended_backend",
     "raise_figure",
 ]
-
-
-def _backend_str() -> str:
-    """Return the current Matplotlib backend string (best-effort)."""
-
-    import matplotlib
-
-    try:
-        return str(matplotlib.get_backend())
-    except Exception as e:
-        _warn_once(
-            "backend_str",
-            "mpl_nonblock: matplotlib.get_backend() failed; treating backend as unknown",
-            e,
-        )
-        return "unknown"
-
-
-def _is_gui_backend(backend: str) -> bool:
-    """Return True if the backend name looks like a GUI backend.
-
-    Used to decide whether showing/refreshing can open a native window.
-    """
-
-    b = backend.lower().strip()
-
-    # Distinction:
-    # - Matplotlib docs group backends into "interactive" and "non-interactive".
-    # - This helper answers a different question: "will this open a native OS window?"
-    #   Notebook/browser backends are interactive, but they are not native windows.
-    #
-    # Reference:
-    # https://matplotlib.org/stable/users/explain/figure/backends.html
-
-    non_gui_exact = {
-        # Non-interactive backends (docs):
-        "agg",
-        "cairo",
-        "pdf",
-        "pgf",
-        "ps",
-        "svg",
-        "template",
-        # Notebook/browser backends (interactive, but not native windows):
-        "inline",
-        "module://matplotlib_inline.backend_inline",
-        "nbagg",
-        "notebook",
-        "webagg",
-    }
-    if b in non_gui_exact:
-        return False
-    if "matplotlib_inline" in b or "backend_inline" in b:
-        return False
-
-    # Known native-window backends.
-    if b == "macosx":
-        return True
-    if b.startswith(("qt", "tk", "gtk3", "gtk4", "wx")):
-        return True
-
-    # Unknown backend string: be conservative.
-    return False
 
 
 def recommended_backend(
@@ -97,7 +32,15 @@ def recommended_backend(
 
     import matplotlib
 
-    current = str(matplotlib.get_backend())
+    try:
+        current = str(matplotlib.get_backend())
+    except Exception as e:
+        _warn_once(
+            "recommended_backend:get_backend",
+            "mpl_nonblock.recommended_backend: matplotlib.get_backend() failed; using platform default",
+            e,
+        )
+        current = ""
     if respect_existing:
         if os.environ.get("MPLBACKEND"):
             return current

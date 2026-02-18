@@ -6,7 +6,7 @@ from datetime import datetime
 
 import matplotlib.pyplot as plt
 
-from mpl_nonblock import refresh, show
+from mpl_nonblock import hold_windows
 
 
 def main() -> None:
@@ -47,12 +47,12 @@ def main() -> None:
         ax2.set_title(f"B: k={k}  [{stamp}]")
         ax2.grid(True, alpha=0.3)
 
-        # Refresh each figure you updated.
-        refresh(fig1)
-        refresh(fig2)
+        # Pump GUI events (nonblocking).
+        plt.pause(0.001)
         time.sleep(0.05)
 
-    show(block=True)
+    # Terminal-run convenience: keep figures open until a key is pressed.
+    hold_windows()
 
 
 if __name__ == "__main__":

@@ -22,9 +22,6 @@ test = [
   "pytest>=7",
 ]
 
-[project.scripts]
-mpl-nonblock-diagnose = "mpl_nonblock.diagnose:main"
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"

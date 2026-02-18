@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+pytest.skip("_is_gui_backend removed", allow_module_level=True)
+
+import pytest
+
 
 @pytest.mark.parametrize(
     "backend",

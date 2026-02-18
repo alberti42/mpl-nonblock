@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import types
+import threading
 from typing import Any
 
 
@@ -13,14 +14,15 @@ def _force_agg_backend() -> None:
     matplotlib.use("Agg", force=True)
 
 
-def test_hold_windows_returns_immediately_on_non_gui_backend(monkeypatch: Any) -> None:
+def test_hold_windows_returns_immediately_when_no_figures(monkeypatch: Any) -> None:
     _force_agg_backend()
 
     import matplotlib.pyplot as plt
 
     from mpl_nonblock import core
 
-    monkeypatch.setattr(core, "_backend_str", lambda: "Agg")
+    monkeypatch.setattr(core.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr(plt, "get_fignums", lambda: [])
     called: list[float] = []
     monkeypatch.setattr(plt, "pause", lambda dt: called.append(dt))
 
@@ -35,27 +37,27 @@ def test_hold_windows_exits_on_enter(monkeypatch: Any) -> None:
 
     from mpl_nonblock import core
 
-    # Pretend we are on a GUI backend.
-    monkeypatch.setattr(core, "_backend_str", lambda: "TkAgg")
-    monkeypatch.setattr(core, "_is_gui_backend", lambda backend: True)
-
-    # One fake figure exists.
-    monkeypatch.setattr(plt, "get_fignums", lambda: [1])
-
-    class DummyCanvas:
-        def start_event_loop(self, dt: float) -> None:
-            return
-
-    class DummyFig:
-        canvas = DummyCanvas()
-
-    monkeypatch.setattr(plt, "figure", lambda n: DummyFig())
-
-    # Make stdin look like a TTY and return immediately.
     monkeypatch.setattr(core.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(core.sys.stdin, "readline", lambda: "\n")
 
+    # One fake figure exists, so hold_windows() starts waiting.
+    monkeypatch.setattr(plt, "get_fignums", lambda: [1])
+
+    # Make the background thread run synchronously.
+    class _ImmediateThread:
+        def __init__(self, *, target: Any, daemon: bool) -> None:
+            self._target = target
+
+        def start(self) -> None:
+            self._target()
+
+    monkeypatch.setattr(threading, "Thread", _ImmediateThread)
+
+    called: list[float] = []
+    monkeypatch.setattr(plt, "pause", lambda dt: called.append(dt))
+
     core.hold_windows(poll=0.0, prompt=None, trigger="Enter")
+    assert called == []
 
 
 def test_hold_windows_only_if_tty(monkeypatch: Any) -> None:
@@ -65,8 +67,6 @@ def test_hold_windows_only_if_tty(monkeypatch: Any) -> None:
 
     from mpl_nonblock import core
 
-    monkeypatch.setattr(core, "_backend_str", lambda: "TkAgg")
-    monkeypatch.setattr(core, "_is_gui_backend", lambda backend: True)
     monkeypatch.setattr(core.sys.stdin, "isatty", lambda: False)
     monkeypatch.setattr(plt, "get_fignums", lambda: [1])
 
@@ -80,10 +80,6 @@ def test_hold_windows_exits_on_any_key_windows_path(monkeypatch: Any) -> None:
     import matplotlib.pyplot as plt
 
     from mpl_nonblock import core
-
-    # Pretend we are on a GUI backend.
-    monkeypatch.setattr(core, "_backend_str", lambda: "TkAgg")
-    monkeypatch.setattr(core, "_is_gui_backend", lambda backend: True)
 
     # Use the Windows (msvcrt) code path even on non-Windows test runners.
     monkeypatch.setattr(core.sys, "platform", "win32")
