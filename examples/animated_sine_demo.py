@@ -11,8 +11,8 @@ def main(argv: list[str] | None = None) -> int:
             "Matplotlib-native animated sine demo (two windows; line.set_ydata + plt.pause)."
         )
     )
-    p.add_argument("--frames", type=int, default=400, help="Number of frames")
-    p.add_argument("--n", type=int, default=600, help="Number of points")
+    p.add_argument("--frames", type=int, default=200, help="Number of frames")
+    p.add_argument("--n", type=int, default=100, help="Number of points")
     p.add_argument(
         "--pause",
         type=float,
@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
     if sys.platform == "darwin":
         matplotlib.use("macosx")
 
-    matplotlib.rcParams['figure.raise_window']=False
+    matplotlib.rcParams["figure.raise_window"] = False
 
     import matplotlib.pyplot as plt
 
@@ -46,11 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     n = max(args.n, 10)
-    x = np.linspace(0.0, 1.0, n)
-    omega = 2.0 * math.pi
+    xdata = [i / (n - 1) for i in range(n)]
+    omega_x = [2.0 * math.pi * xi for xi in xdata]
 
     fig1, ax1 = plt.subplots(num="animated_sine: phase", clear=True, figsize=(8, 4))
-    (line1,) = ax1.plot(x, np.zeros_like(x))
+    (line1,) = ax1.plot(xdata, [0.0] * n)
     ax1.set_ylim(-1.2, 1.2)
     ax1.grid(True, alpha=0.3)
     ax1.set_title("moving sine (phase)")
@@ -71,7 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     fig2, ax2 = plt.subplots(num="animated_sine: amplitude", clear=True, figsize=(8, 4))
-    (line2,) = ax2.plot(x, np.zeros_like(x), color="tab:orange")
+    (line2,) = ax2.plot(xdata, [0.0] * n, color="tab:orange")
     ax2.set_ylim(-1.2, 1.2)
     ax2.grid(True, alpha=0.3)
     ax2.set_title("amplitude-modulated sine")
@@ -137,7 +137,7 @@ def main(argv: list[str] | None = None) -> int:
                 # Wait a little for the native windows to become queryable.
                 for _ in range(20):
                     try:
-                        x, y, w, h = mgr1.get_window_frame()  # type: ignore[attr-defined]
+                        wx, wy, ww, wh = mgr1.get_window_frame()  # type: ignore[attr-defined]
                         break
                     except Exception:
                         plt.pause(0.01)
@@ -152,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
 
                 # Try to place window 2 above window 1; if that would go off-screen,
                 # place it below instead.
-                y_above = y + h0 + margin
-                y_below = y - h0 - margin
+                y_above = wy + h0 + margin
+                y_below = wy - h0 - margin
 
                 try:
                     sx, sy, sw, sh = mgr1.get_screen_frame()  # type: ignore[attr-defined]
@@ -169,12 +169,8 @@ def main(argv: list[str] | None = None) -> int:
                     if sy is not None and y2 < sy:
                         y2 = sy
 
-                tracker1.set_frame(x, y, w0, h0)
-                tracker2.set_frame(x, y2, w0, h0)
-
-                tracker1.raise_window()
-                tracker2.raise_window()
-                
+                tracker1.set_frame(wx, wy, w0, h0)
+                tracker2.set_frame(wx, y2, w0, h0)
                 plt.pause(0.01)
             except Exception:
                 pass
@@ -184,17 +180,25 @@ def main(argv: list[str] | None = None) -> int:
         # "no cache" stacking demo.
         tracker1.set_window_level(floating=True)
 
+        # Bring the windows to the foreground once at startup.
+        # Note: only one window can be the key/frontmost window at a time; the
+        # last raised window typically ends up in front.
+        plt.pause(0.01)
+        tracker2.raise_window()
+        tracker1.raise_window()
+        plt.pause(0.01)
+
     target_fps = float(args.fps)
     dt = 1.0 / target_fps if target_fps > 0 else 0.0
     t0 = time.perf_counter()
 
     for k in range(max(args.frames, 1)):
         phase = 0.15 * k
-        line1.set_ydata(np.sin(omega * x + phase))
+        line1.set_ydata([math.sin(v + phase) for v in omega_x])
 
         # Amplitude oscillates between -1 and 1.
         amp = math.sin(0.05 * k)
-        line2.set_ydata(amp * np.sin(omega * x))
+        line2.set_ydata([amp * math.sin(v) for v in omega_x])
         ax2.set_title(f"amplitude-modulated sine (amp={amp:+.2f})")
         plt.pause(max(args.pause, 0.0))
 
