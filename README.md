@@ -136,9 +136,10 @@ This installs the optional Qt dependency (`PySide6`).
 
 ## Agent skill bundle
 
-Each GitHub Release includes an optional agent-skill zip:
+Each GitHub Release includes an optional agent-skill zip. You can download the latest version
+following this link:
 
-- `matplotlib-window-tracker-agent-skill.zip`
+- [`matplotlib-window-tracker-agent-skill.zip`](https://github.com/alberti42/matplotlib-window-tracker/releases/latest/download/matplotlib-window-tracker-agent-skill.zip)
 
 This bundle contains `README.md` + `SKILL.md` and is meant to be installed into your
 agent's skills directory (OpenCode, Codex, Claude Code, etc.).
