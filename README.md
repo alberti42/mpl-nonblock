@@ -56,7 +56,7 @@ On macOS, the `macosx` backend is built in and does not require extra installati
 - Terminal-run convenience `hold_windows()`: keep a script alive after creating
   figures while keeping the GUI responsive; exit when a key is pressed or when all
   figures are closed.
-- Best-effort focus helper (optional): `raise_figure(fig)` attempts to bring a
+- Best-effort focus helper (optional): `raise_window(fig)` attempts to bring a
   native figure window to the foreground on supported backends.
 
 ## Requirements
@@ -319,7 +319,7 @@ Import name is `matplotlib_window_tracker`:
       returns the current backend when `respect_existing=True`.
     - Does not call `matplotlib.use()`; backend selection stays explicit.
 
-  - `raise_figure(fig)`
+  - `raise_window(fig)`
     - Best-effort: bring a native figure window to the foreground (backend-dependent).
 
   - `track_position_size(fig, *, tag, restore_from_cache=True, cache_dir=None) -> WindowTracker | None`
@@ -392,7 +392,7 @@ Use `fig.savefig(...)`.
 
 ## Design Notes / Limitations
 
-- `raise_figure()` is best-effort and backend/OS dependent. Some window managers and OS
+- `raise_window()` is best-effort and backend/OS dependent. Some window managers and OS
   focus-stealing rules may ignore requests to raise/activate a window.
 - Backend switching is only possible before importing `matplotlib.pyplot`.
 - `hold_windows()` is meant for terminal-run scripts; it returns immediately when stdin

@@ -18,7 +18,13 @@ _WARNED_ONCE: set[str] = set()
 _IN_IPYTHON: bool | None = None
 
 
-def _warn_once(key: str, message: str, exc: BaseException | None = None) -> None:
+def _warn_once(
+    key: str,
+    message: str,
+    exc: BaseException | None = None,
+    *,
+    category: type[Warning] = RuntimeWarning,
+) -> None:
     """Warn once per process for a given key.
 
     This library does a lot of best-effort backend/IPython integration where failures
@@ -31,7 +37,7 @@ def _warn_once(key: str, message: str, exc: BaseException | None = None) -> None
     _WARNED_ONCE.add(key)
 
     detail = f" ({exc.__class__.__name__}: {exc})" if exc is not None else ""
-    warnings.warn(f"{message}{detail}", RuntimeWarning, stacklevel=3)
+    warnings.warn(f"{message}{detail}", category, stacklevel=3)
 
 
 def _in_ipython() -> bool:

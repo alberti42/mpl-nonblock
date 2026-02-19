@@ -9,7 +9,7 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "matplotlib-window-tracker requires matplotlib. Install it first (e.g. `pip install matplotlib`)."
     ) from e
 
-from .backends import raise_figure, recommended_backend
+from .backends import raise_window, recommended_backend
 from ._helpers import is_interactive
 from .core import hold_windows
 from .geometry_cache import WindowTracker, track_position_size
@@ -23,7 +23,7 @@ __all__ = [
     "__version__",
     "hold_windows",
     "is_interactive",
-    "raise_figure",
+    "raise_window",
     "recommended_backend",
     "track_position_size",
     "WindowTracker",

@@ -93,6 +93,12 @@ it returns the current backend when `respect_existing=True`.
 
 This does not call `matplotlib.use()`; it keeps backend selection explicit.
 
+### `raise_window(fig) -> None`
+
+Best-effort: raise/focus a Matplotlib window.
+
+If your backend manager exposes `fig.canvas.manager.raise_window()`, prefer that.
+
 ### `track_position_size(fig, *, tag, restore_from_cache=True, cache_dir=None) -> WindowTracker | None`
 
 macOS-only window geometry persistence.

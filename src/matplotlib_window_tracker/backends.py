@@ -8,7 +8,7 @@ from ._helpers import _warn_once
 
 __all__ = [
     "recommended_backend",
-    "raise_figure",
+    "raise_window",
 ]
 
 
@@ -67,16 +67,29 @@ def recommended_backend(
     return other
 
 
-def raise_figure(fig: Any) -> None:
+def raise_window(fig: Any) -> None:
     """Best-effort: raise/focus a Matplotlib figure window.
 
-    Matplotlib does not expose a single portable "raise this window" API.
-    This helper pokes backend-specific manager/window objects when available.
+    This helper aligns with the upstream manager API name `raise_window()`.
+
+    Behavior:
+    - If the backend manager exposes `fig.canvas.manager.raise_window()`, this
+      function calls it.
+    - Otherwise, it falls back to backend-specific best-effort raising.
 
     This function is intentionally best-effort:
     - It may do nothing on unsupported backends.
     - It should not raise.
     """
+
+    try:
+        mgr = fig.canvas.manager  # type: ignore[attr-defined]
+        raise_fn = getattr(mgr, "raise_window", None)
+        if callable(raise_fn):
+            raise_fn()
+            return
+    except Exception:
+        pass
 
     try:
         import matplotlib
